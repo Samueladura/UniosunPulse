@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors, spacing, radius, typography} from '../../theme/colors';
-import {adminService, AdminElection} from '../../services/adminService';
+import {adminService} from '../../services/adminService';
 
 type PendingCandidate = {
   name: string;
@@ -37,8 +37,6 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
   const [description, setDescription] = useState(
     existingElection?.description || '',
   );
-  const [startTime, setStartTime] = useState(existingElection?.startTime || '');
-  const [endTime, setEndTime] = useState(existingElection?.endTime || '');
 
   const [startDate, setStartDate] = useState('');
   const [startTimeOnly, setStartTimeOnly] = useState('');
@@ -128,6 +126,7 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
       return;
     }
 
+    setAddingCandidate(true);
     setPendingCandidates(prev => [
       ...prev,
       {
@@ -141,6 +140,7 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
     setCandidatePosition('');
     setCandidateManifesto('');
     setCandidateAvatar('');
+    setAddingCandidate(false);
   };
 
   const removePendingCandidate = (index: number) => {
