@@ -47,7 +47,8 @@ interface VerifyBallotScreenProps {
 const DEFAULT_CANDIDATE = {
   id: '2',
   name: 'Adebayo Oluwaseun',
-  photo_url: 'https://i.pravatar.cc/200?img=45',
+  position: 'President',
+  photo_url: '',
   faculty: 'Engineering',
   level: '400 Level',
 };
@@ -234,12 +235,14 @@ export default function VerifyBallotScreen({
 
           <View style={styles.selectionBox}>
             <View style={styles.selectionTopRow}>
-              <Image
-                source={{
-                  uri: candidate.photo_url || 'https://i.pravatar.cc/200?img=1',
-                }}
-                style={styles.selectionAvatar}
-              />
+              {candidate.photo_url ? (
+                <Image
+                  source={{uri: candidate.photo_url}}
+                  style={styles.selectionAvatar}
+                />
+              ) : (
+                <View style={styles.selectionAvatar} />
+              )}
               <View style={styles.flexOne}>
                 <View style={styles.currentSelectionBadge}>
                   <Text style={styles.currentSelectionText}>

@@ -235,6 +235,23 @@ export async function updateProfile(fields: {
   return {error: null};
 }
 
+export async function signInWithOtp(
+  email: string,
+  options?: {shouldCreateUser?: boolean},
+): Promise<{error: string | null}> {
+  try {
+    const {error} = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: options?.shouldCreateUser ?? false,
+      },
+    });
+    return {error: error ? error.message : null};
+  } catch (e: any) {
+    return {error: e?.message || 'An unexpected error occurred'};
+  }
+}
+
 export async function changePassword(
   newPassword: string,
 ): Promise<{error: string | null}> {

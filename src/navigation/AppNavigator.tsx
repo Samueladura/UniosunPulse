@@ -15,6 +15,7 @@ import ElectionBallotScreen from '../screens/election/ElectionBallotScreen';
 import VerifyBallotScreen from '../screens/election/VerifyBallotScreen';
 import VoteSuccessScreen from '../screens/election/VoteSuccessScreen';
 import LiveResultsScreen from '../screens/election/LiveResultsScreen';
+import VerifyEmailScreen from '../screens/VerifyEmailScreen';
 
 // Admin Suite Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -50,6 +51,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   SignIn: undefined;
   CreateAccount: undefined;
+  VerifyEmail: {email: string; fullName?: string};
   Welcome: undefined;
   Home: undefined;
   NewPost: undefined;
@@ -207,6 +209,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="SignIn" component={SignInScreen} />
         <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
+        <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
         <Stack.Screen name="Welcome" component={HomeScreen} />
         <Stack.Screen name="Home" component={MainTabs} />
         <Stack.Screen

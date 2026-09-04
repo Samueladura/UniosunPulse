@@ -20,7 +20,7 @@ import {supabase, type Post} from '../../services/supabase';
 interface AdminPostRow {
   id: string;
   title: string;
-  body: string;
+  body: string | null;
   image: string | null;
   tag: string;
   like_count: number;

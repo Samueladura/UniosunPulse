@@ -121,12 +121,14 @@ function CandidateCard({candidate, selected, onSelect}: CandidateCardProps) {
       style={[styles.candidateCard, selected && styles.candidateCardSelected]}
       activeOpacity={0.85}
       onPress={onSelect}>
-      <Image
-        source={{
-          uri: candidate.avatar_url || 'https://i.pravatar.cc/200?img=1',
-        }}
-        style={styles.candidatePhoto}
-      />
+      {candidate.avatar_url ? (
+        <Image
+          source={{uri: candidate.avatar_url}}
+          style={styles.candidatePhoto}
+        />
+      ) : (
+        <View style={styles.candidatePhoto} />
+      )}
       <View style={styles.candidateHeaderRow}>
         <Text style={styles.candidateName}>{candidate.name}</Text>
         <View style={[styles.radio, selected && styles.radioSelected]}>

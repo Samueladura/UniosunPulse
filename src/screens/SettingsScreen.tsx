@@ -462,17 +462,17 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
   const displayName =
     profile?.full_name ||
     (isAdmin ? 'Campus Admin (Official)' : 'UniOsun Student');
-  const avatarSource = profile?.avatar_url
-    ? {uri: profile.avatar_url}
-    : isAdmin
-      ? require('../assets/uniosun-logo.png')
-      : {uri: `https://i.pravatar.cc/100?u=${encodeURIComponent(profile?.id || 'guest')}`};
+  const avatarSource = profile?.avatar_url ? {uri: profile.avatar_url} : null;
 
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <Image source={avatarSource} style={styles.avatar} />
+        {avatarSource ? (
+          <Image source={avatarSource} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarFallback]} />
+        )}
         <View style={styles.flexOne}>
           <Text style={styles.headerName}>{displayName}</Text>
           <Text style={styles.headerEmail}>{displayEmail}</Text>
@@ -901,8 +901,7 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
                     <Image
                       source={{
                         uri:
-                          item.avatar_url ||
-                          `https://i.pravatar.cc/100?u=${item.id}`,
+                          item.avatar_url || '',
                       }}
                       style={styles.blockedAvatar}
                     />
@@ -1144,6 +1143,7 @@ const getStyles = () =>
       gap: 12,
     },
     avatar: {width: 36, height: 36, borderRadius: 18},
+    avatarFallback: {backgroundColor: colors.border},
     headerName: {fontSize: 15, fontWeight: '700', color: colors.textPrimary},
     headerEmail: {fontSize: 12, color: colors.textSecondary},
 

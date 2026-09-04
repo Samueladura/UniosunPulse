@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Platform,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -15,7 +14,7 @@ import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
-import {supabase, recordLoginEvent} from '../services/supabase';
+import {supabase, signInWithOtp} from '../services/supabase';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
 
@@ -111,6 +110,25 @@ export default function CreateAccountScreen({navigation}: Props) {
   );
 
   const handleCreateAccount = async () => {
+    if (!fullName.trim()) {
+      Alert.alert('Name Required', 'Please enter your full name.');
+      return;
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      Alert.alert(
+        'Weak Password',
+        'Password must be at least 6 characters long.',
+      );
+      return;
+    }
+
     if (!agreed) {
       Alert.alert(
         'Terms Required',
@@ -118,26 +136,97 @@ export default function CreateAccountScreen({navigation}: Props) {
       );
       return;
     }
+
     setLoading(true);
-    const {error} = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    try {
+      const {data: signUpData, error: signUpError} = await supabase.auth.signUp(
+        {
+          email: trimmedEmail,
+          password,
+          options: {
+            data: {
+              full_name: fullName.trim(),
+            },
+          },
         },
-      },
-    });
-    setLoading(false);
-    if (error) {
-      Alert.alert('Account Creation Failed', error.message);
-    } else {
-      recordLoginEvent({device: Platform.OS === 'ios' ? 'iPhone' : 'Android'});
-      Alert.alert(
-        'Success',
-        'Account created! Please check your email to verify.',
-        [{text: 'OK', onPress: () => navigation.replace('Home')}],
       );
+
+      if (signUpError) {
+        const rawMsg =
+          typeof signUpError.message === 'string'
+            ? signUpError.message
+            : JSON.stringify(signUpError);
+        const errorMsg = rawMsg.toLowerCase();
+
+        if (
+          errorMsg.includes('already registered') ||
+          errorMsg.includes('already exists')
+        ) {
+          Alert.alert(
+            'Account Exists',
+            'An account with this email address already exists.',
+            [
+              {
+                text: 'Sign In',
+                onPress: () => navigation.navigate('SignIn'),
+              },
+              {
+                text: 'Verify Email',
+                onPress: async () => {
+                  const {error: otpErr} = await signInWithOtp(trimmedEmail, {
+                    shouldCreateUser: false,
+                  });
+                  if (
+                    otpErr &&
+                    !otpErr.toLowerCase().includes('rate limit') &&
+                    !otpErr.toLowerCase().includes('60 seconds')
+                  ) {
+                    Alert.alert('OTP Notice', otpErr);
+                  }
+                  navigation.navigate('VerifyEmail', {
+                    email: trimmedEmail,
+                    fullName: fullName.trim(),
+                  });
+                },
+              },
+              {text: 'Cancel', style: 'cancel'},
+            ],
+          );
+          return;
+        }
+
+        if (
+          errorMsg.includes('500') ||
+          errorMsg.includes('unexpected_failure')
+        ) {
+          Alert.alert(
+            'Supabase Server Error (500)',
+            'Account creation failed on Supabase backend.\n\nThis is caused by either:\n1. Resend Sender Email/Domain not being verified in Resend Dashboard.\n2. Resend API key or SMTP configuration mismatch in Supabase.\n3. Missing database tables in Supabase SQL Editor.',
+          );
+          return;
+        }
+
+        Alert.alert('Account Creation Failed', rawMsg);
+        return;
+      }
+
+      // If user session is established automatically (e.g. Email Confirmation disabled in Supabase)
+      if (signUpData?.session) {
+        navigation.replace('Home');
+        return;
+      }
+
+      navigation.replace('VerifyEmail', {
+        email: trimmedEmail,
+        fullName: fullName.trim(),
+      });
+    } catch (e: any) {
+      Alert.alert(
+        'Error',
+        e?.message || 'An unexpected error occurred. Please try again.',
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -170,9 +259,10 @@ export default function CreateAccountScreen({navigation}: Props) {
 
           <AppInput
             label="Email"
-            leftIcon="book-open"
+            leftIcon="at-sign"
             placeholder="name@gmail.com"
             autoCapitalize="none"
+            keyboardType="email-address"
             value={email}
             onChangeText={setEmail}
           />

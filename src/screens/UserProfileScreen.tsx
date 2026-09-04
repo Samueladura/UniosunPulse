@@ -29,8 +29,6 @@ import type {RootStackParamList} from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UserProfile'>;
 
-const SCHOOL_LOGO = require('../assets/uniosun-logo.png');
-
 function formatCount(value: number): string {
   if (value >= 1000000) {
     return `${(value / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
@@ -156,9 +154,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
         id: profile.id,
         name: safeName,
         handle: '@student',
-        avatar:
-          profile.avatar_url ||
-          (isAdmin ? SCHOOL_LOGO : `https://i.pravatar.cc/100?u=${profile.id}`),
+        avatar: profile.avatar_url || '',
         bio: isAdmin ? 'Campus Admin' : profile.department || 'UniOsun student',
         followers: isBabayemi ? 300 : followersCount,
         following: followingCount,
@@ -168,7 +164,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
       id: requestId,
       name: 'Unknown User',
       handle: '@unknown',
-      avatar: `https://i.pravatar.cc/100?u=${requestId}`,
+      avatar: '',
       bio: '',
       followers: followersCount,
       following: followingCount,

@@ -306,7 +306,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
   const authorAvatar =
     postParam?.author_id === 'admin_official'
       ? require('../assets/uniosun-logo.png')
-      : postParam?.avatar || 'https://i.pravatar.cc/100?img=32';
+      : postParam?.avatar || '';
   const postTime = postParam?.time || new Date().toLocaleString();
   const postTag = postParam?.tag || 'ACADEMIC';
   const postTitle =
@@ -339,7 +339,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
               id: r.id,
               user_id: r.user_id,
               name: r.author_name || 'Anonymous',
-              avatar: r.avatar || 'https://i.pravatar.cc/100?img=14',
+              avatar: r.avatar || '',
               time: new Date(r.created_at).toLocaleString(),
               body: r.body,
             })),
@@ -391,7 +391,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
       id: `${Date.now()}`,
       user_id: currentUserId || '',
       name: 'You',
-      avatar: 'https://i.pravatar.cc/100?img=14',
+      avatar: '',
       time: 'Just now',
       body: commentText.trim(),
       isAuthor: true,

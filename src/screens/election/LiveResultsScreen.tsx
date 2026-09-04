@@ -426,12 +426,14 @@ export default function LiveResultsScreen({navigation, route}: any) {
             <View style={styles.winnerCrown}>
               <Icon name="award" size={20} color="#FFFFFF" />
             </View>
-            <Image
-              source={{
-                uri: winner.photo_url || 'https://i.pravatar.cc/200?img=1',
-              }}
-              style={styles.winnerPhoto}
-            />
+            {winner.photo_url ? (
+              <Image
+                source={{uri: winner.photo_url}}
+                style={styles.winnerPhoto}
+              />
+            ) : (
+              <View style={styles.winnerPhoto} />
+            )}
             <Text style={styles.winnerName}>{winner.name}</Text>
             <Text style={styles.winnerMeta}>Leading Candidate</Text>
             <Text style={styles.winnerPercent}>{winner.percent}%</Text>
@@ -464,12 +466,14 @@ export default function LiveResultsScreen({navigation, route}: any) {
               <View style={styles.rankBadge}>
                 <Text style={styles.rankText}>{index + 1}</Text>
               </View>
-              <Image
-                source={{
-                  uri: result.photo_url || 'https://i.pravatar.cc/200?img=1',
-                }}
-                style={styles.photo}
-              />
+              {result.photo_url ? (
+                <Image
+                  source={{uri: result.photo_url}}
+                  style={styles.photo}
+                />
+              ) : (
+                <View style={styles.photo} />
+              )}
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName}>{result.name}</Text>
                 <Text style={styles.resultMeta}>

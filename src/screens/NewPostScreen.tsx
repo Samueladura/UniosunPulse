@@ -44,7 +44,7 @@ export default function NewPostScreen({}: Props) {
   }, []);
 
   const displayName = profile?.full_name || 'Ayo Balogun';
-  const avatarUrl = profile?.avatar_url || 'https://i.pravatar.cc/100?img=14';
+  const avatarUrl = profile?.avatar_url || '';
   const verifiedBadgeVisible =
     profile?.verified || profile?.email === 'babayemiayomide87@gmail.com';
 
@@ -61,14 +61,14 @@ export default function NewPostScreen({}: Props) {
       await addPost({
         title: trimmed,
         body: trimmed,
-        image: imageUri || undefined,
+        image: imageUri || null,
         tag: category.toUpperCase(),
         author: displayName,
         avatar: avatarUrl,
         author_id: profile.id,
         author_name: profile.full_name ?? 'Anonymous',
-        likeCount: 0,
-        comments: 0,
+        like_count: 0,
+        comment_count: 0,
       });
 
       setText('');
@@ -125,7 +125,11 @@ export default function NewPostScreen({}: Props) {
       <View style={styles.content}>
         <View style={styles.userRow}>
           <View>
-            <Image source={{uri: avatarUrl}} style={styles.avatar} />
+            {avatarUrl ? (
+              <Image source={{uri: avatarUrl}} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]} />
+            )}
             {verifiedBadgeVisible && (
               <View style={styles.verifiedBadge}>
                 <Icon
@@ -244,6 +248,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   avatar: {width: 48, height: 48, borderRadius: 24},
+  avatarFallback: {backgroundColor: colors.border},
   verifiedBadge: {
     position: 'absolute',
     bottom: -2,

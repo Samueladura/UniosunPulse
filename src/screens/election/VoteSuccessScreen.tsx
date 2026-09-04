@@ -18,6 +18,8 @@ const LIGHT_COLORS = {
   green: '#1F6B4A',
   gold: '#B8860B',
   goldLight: '#FBF3DE',
+  red: '#D14343',
+  redLight: '#FBECEC',
   text: '#161B22',
   subtext: '#8A929B',
   border: '#ECEDEF',
@@ -30,6 +32,8 @@ const DARK_COLORS = {
   green: '#4ADE80',
   gold: '#D9A029',
   goldLight: '#3A2A12',
+  red: '#F87171',
+  redLight: '#3A1A1A',
   text: '#F3F6F4',
   subtext: '#A7B5AD',
   border: '#1F3329',
@@ -37,7 +41,7 @@ const DARK_COLORS = {
 
 interface VoteSuccessScreenProps {
   navigation?: any;
-  route?: {params?: {receiptId?: string | null; isDuplicate?: boolean}};
+  route?: {params?: {receiptId?: string | null; isDuplicate?: boolean; electionId?: string}};
 }
 
 const getMainStyles = (C: typeof LIGHT_COLORS | typeof DARK_COLORS) =>

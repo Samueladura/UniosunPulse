@@ -49,7 +49,7 @@ const darkColors: Partial<typeof colors> = {
   accentSoft: '#14532D',
   background: '#0B1410',
   card: '#13211A',
-  border: '#1F3329',
+  border: '#3A5A4E',
   textPrimary: '#F3F6F4',
   textSecondary: '#A7B5AD',
   textMuted: '#7C8A82',
@@ -57,7 +57,7 @@ const darkColors: Partial<typeof colors> = {
   tagCampusLife: '#3A2A12',
   tagEvents: '#3A1A1A',
   overlay: 'rgba(0, 0, 0, 0.6)',
-  surface: '#1A2B23',
+  surface: '#243831',
   likeActive: '#F472B6',
   tagCampusLifeText: '#FB923C',
   tagEventsText: '#F87171',
@@ -105,6 +105,7 @@ const lightColors: typeof colors = {
   interestBlueBg: '#EFF6FF',
   interestGreen: '#059669',
   interestGreenBg: '#ECFDF5',
+  verifiedBadge: '#2563EB',
 };
 
 export function applyTheme(isDark: boolean): void {

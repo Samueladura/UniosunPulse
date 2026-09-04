@@ -118,7 +118,7 @@ export default function AdminContentModerationScreen({navigation}: any) {
         author_id: 'admin_official',
         author_name: AUTHOR_NAME,
         author: AUTHOR_NAME,
-        avatar: profile?.avatar_url || null,
+        avatar: profile?.avatar_url || '',
         title: title.trim(),
         body: body.trim(),
         image: imageUri || imageUrl.trim() || null,

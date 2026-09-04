@@ -1,12 +1,5 @@
 import React, {useRef, useState} from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  StatusBar,
-  Image,
-  ImageBackground,
-} from 'react-native';
+import {View, Text, StyleSheet, StatusBar, Image} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
@@ -15,18 +8,11 @@ import {colors, radius, spacing} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
-import type {ImageStyle} from 'react-native';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
-const AVATARS = [
-  'https://i.pravatar.cc/100?img=1',
-  'https://i.pravatar.cc/100?img=2',
-  'https://i.pravatar.cc/100?img=3',
-];
-
 export default function OnboardingScreen({navigation}: Props) {
-  const [isVideoReady, setIsVideoReady] = useState(false);
+  const [, setIsVideoReady] = useState(false);
   const videoRef = useRef<any>(null);
 
   const stopVideo = () => {
@@ -128,17 +114,6 @@ export default function OnboardingScreen({navigation}: Props) {
         paddingLeft: spacing.xs,
         gap: spacing.sm,
       },
-      avatarStack: {flexDirection: 'row', alignItems: 'center'},
-      avatar: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        borderWidth: 2,
-        borderColor: colors.white,
-      },
-      avatarStackItem: {
-        marginLeft: -10,
-      },
       countBadge: {
         backgroundColor: colors.primary,
         alignItems: 'center',
@@ -225,25 +200,8 @@ export default function OnboardingScreen({navigation}: Props) {
         </View>
 
         <View style={styles.joinedRow}>
-          <View style={styles.avatarStack}>
-            {AVATARS.map((uri, i) => (
-              <Image
-                key={uri}
-                source={{uri}}
-                style={[
-                  styles.avatar as ImageStyle,
-                  i !== 0 && styles.avatarStackItem,
-                ]}
-              />
-            ))}
-            <View
-              style={[
-                styles.avatar,
-                styles.countBadge,
-                styles.avatarStackItem,
-              ]}>
-              <Text style={styles.countText}>10k+</Text>
-            </View>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>10k+</Text>
           </View>
           <Text style={styles.joinedText}>Joined by 10,000+ Students</Text>
         </View>
