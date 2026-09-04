@@ -41,7 +41,13 @@ const DARK_COLORS = {
 
 interface VoteSuccessScreenProps {
   navigation?: any;
-  route?: {params?: {receiptId?: string | null; isDuplicate?: boolean; electionId?: string}};
+  route?: {
+    params?: {
+      receiptId?: string | null;
+      isDuplicate?: boolean;
+      electionId?: string;
+    };
+  };
 }
 
 const getMainStyles = (C: typeof LIGHT_COLORS | typeof DARK_COLORS) =>
@@ -206,7 +212,9 @@ export default function VoteSuccessScreen({
           <View style={styles.receiptCard}>
             <View style={styles.receiptHeaderRow}>
               <Text style={styles.receiptLabel}>
-                {isDuplicate ? 'ORIGINAL BALLOT RECEIPT' : 'YOUR BALLOT RECEIPT'}
+                {isDuplicate
+                  ? 'ORIGINAL BALLOT RECEIPT'
+                  : 'YOUR BALLOT RECEIPT'}
               </Text>
               <Icon name="shield" size={16} color={C.green} />
             </View>
@@ -235,7 +243,8 @@ export default function VoteSuccessScreen({
               <Icon name="shield-off" size={16} color={C.red} />
             </View>
             <Text style={[styles.receiptNote, styles.receiptNoteMarginTop]}>
-              We could not generate a ballot receipt for this session. Please contact the electoral committee if you believe this is an error.
+              We could not generate a ballot receipt for this session. Please
+              contact the electoral committee if you believe this is an error.
             </Text>
           </View>
         )}
@@ -253,7 +262,11 @@ export default function VoteSuccessScreen({
 
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => navigation?.navigate('LiveResults', {electionId: route?.params?.electionId})}>
+          onPress={() =>
+            navigation?.navigate('LiveResults', {
+              electionId: route?.params?.electionId,
+            })
+          }>
           <Text style={styles.primaryButtonText}>View Live Results</Text>
           <Icon name="bar-chart-2" size={16} color="#FFFFFF" />
         </TouchableOpacity>

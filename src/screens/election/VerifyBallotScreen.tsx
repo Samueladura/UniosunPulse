@@ -202,7 +202,8 @@ export default function VerifyBallotScreen({
     } catch (err: any) {
       Alert.alert(
         'Vote Failed',
-        err?.message || 'Something went wrong while casting your vote. Please try again.',
+        err?.message ||
+          'Something went wrong while casting your vote. Please try again.',
       );
     }
   };

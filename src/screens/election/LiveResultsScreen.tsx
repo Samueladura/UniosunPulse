@@ -467,10 +467,7 @@ export default function LiveResultsScreen({navigation, route}: any) {
                 <Text style={styles.rankText}>{index + 1}</Text>
               </View>
               {result.photo_url ? (
-                <Image
-                  source={{uri: result.photo_url}}
-                  style={styles.photo}
-                />
+                <Image source={{uri: result.photo_url}} style={styles.photo} />
               ) : (
                 <View style={styles.photo} />
               )}

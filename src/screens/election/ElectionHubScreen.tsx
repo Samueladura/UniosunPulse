@@ -61,7 +61,13 @@ interface ResultCard {
   winner: string;
 }
 
-function CountdownTimer({targetISO, textStyle}: {targetISO: string | null | undefined; textStyle: any}) {
+function CountdownTimer({
+  targetISO,
+  textStyle,
+}: {
+  targetISO: string | null | undefined;
+  textStyle: any;
+}) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -89,19 +95,21 @@ function CountdownTimer({targetISO, textStyle}: {targetISO: string | null | unde
   const pad = (n: number) => n.toString().padStart(2, '0');
 
   return (
-    <Text style={textStyle}>
-      {`${pad(h)}h : ${pad(m)}m : ${pad(s)}s`}
-    </Text>
+    <Text style={textStyle}>{`${pad(h)}h : ${pad(m)}m : ${pad(s)}s`}</Text>
   );
 }
 
-const isElectionEnded = (election: { end_at?: string }) => {
-  if (!election.end_at) return false;
+const isElectionEnded = (election: {end_at?: string}) => {
+  if (!election.end_at) {
+    return false;
+  }
   return new Date(election.end_at) < new Date();
 };
 
 const formatDateTime = (iso: string | undefined) => {
-  if (!iso) return null;
+  if (!iso) {
+    return null;
+  }
   const date = new Date(iso);
   const day = date.getDate().toString().padStart(2, '0');
   const month = date.toLocaleString('en-US', {month: 'short'});
@@ -432,7 +440,9 @@ export default function ElectionHubScreen({navigation}: any) {
       .order('end_at', {ascending: false})
       .limit(5);
 
-    if (!endedElections) return;
+    if (!endedElections) {
+      return;
+    }
 
     const results: ResultCard[] = [];
     for (const election of endedElections) {
@@ -540,7 +550,10 @@ export default function ElectionHubScreen({navigation}: any) {
                     <Icon name="clock" size={14} color={C.green} />
                     <Text style={styles.countdownLabel}>
                       {ended ? 'Ended' : 'Ends in:'}{' '}
-                      <CountdownTimer targetISO={election.end_at} textStyle={styles.countdownValue} />
+                      <CountdownTimer
+                        targetISO={election.end_at}
+                        textStyle={styles.countdownValue}
+                      />
                     </Text>
                   </View>
                   <Text style={styles.votedText}>{votedPercent}% Voted</Text>
@@ -573,9 +586,7 @@ export default function ElectionHubScreen({navigation}: any) {
                       ]}>
                       {ended ? 'Vote Closed' : 'Vote Now'}
                     </Text>
-                    {!ended && (
-                      <Icon name="upload" size={16} color="#FFFFFF" />
-                    )}
+                    {!ended && <Icon name="upload" size={16} color="#FFFFFF" />}
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -592,28 +603,28 @@ export default function ElectionHubScreen({navigation}: any) {
                   </TouchableOpacity>
                 </View>
 
-              {election.start_at || election.end_at ? (
-                <View style={styles.electionTimeRow}>
-                  <Icon name="calendar" size={12} color={C.subtext} />
-                  <View style={styles.electionTimeWrap}>
-                    <Text style={styles.electionTimeText}>
-                      {formatDateTime(election.start_at)?.date || 'TBD'}
-                      {' · '}
-                      {formatDateTime(election.start_at)?.time || ''}
-                    </Text>
-                    <Text style={styles.electionTimeText}>{' → '}</Text>
-                    <Text style={styles.electionTimeText}>
-                      {formatDateTime(election.end_at)?.date || 'TBD'}
-                      {' · '}
-                      {formatDateTime(election.end_at)?.time || ''}
-                    </Text>
+                {election.start_at || election.end_at ? (
+                  <View style={styles.electionTimeRow}>
+                    <Icon name="calendar" size={12} color={C.subtext} />
+                    <View style={styles.electionTimeWrap}>
+                      <Text style={styles.electionTimeText}>
+                        {formatDateTime(election.start_at)?.date || 'TBD'}
+                        {' · '}
+                        {formatDateTime(election.start_at)?.time || ''}
+                      </Text>
+                      <Text style={styles.electionTimeText}>{' → '}</Text>
+                      <Text style={styles.electionTimeText}>
+                        {formatDateTime(election.end_at)?.date || 'TBD'}
+                        {' · '}
+                        {formatDateTime(election.end_at)?.time || ''}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              ) : null}
+                ) : null}
+              </View>
             </View>
-          </View>
-        )}
-      )}
+          );
+        })}
 
         <Text style={styles.sectionHeaderText2}>Upcoming Polls</Text>
         {upcomingPolls.length === 0 && (
@@ -648,7 +659,9 @@ export default function ElectionHubScreen({navigation}: any) {
           contentContainerStyle={styles.scrollGap12}>
           {recentResults.length === 0 ? (
             <View style={styles.miniCard}>
-              <Text style={styles.votedText}>No completed election results yet.</Text>
+              <Text style={styles.votedText}>
+                No completed election results yet.
+              </Text>
             </View>
           ) : (
             recentResults.map(result => (

@@ -12,7 +12,12 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../theme/colors.ts';
 import {usePrefs, useThemedStyles} from '../theme/PreferencesContext';
-import {fetchAlerts, markAllAlertsRead, supabase, type Alert} from '../services/supabase';
+import {
+  fetchAlerts,
+  markAllAlertsRead,
+  supabase,
+  type Alert,
+} from '../services/supabase';
 import {useAlerts} from '../context/AlertsContext';
 
 const LIGHT_COLORS = {
@@ -497,10 +502,10 @@ export default function AlertsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Image
-              source={require('../assets/uniosun-logo.png')}
-              style={styles.headerAvatar}
-              resizeMode="contain"
-            />
+          source={require('../assets/uniosun-logo.png')}
+          style={styles.headerAvatar}
+          resizeMode="contain"
+        />
         <Text style={styles.headerTitle}>
           Alerts {unreadCount > 0 ? `(${unreadCount})` : ''}
         </Text>
@@ -534,31 +539,31 @@ export default function AlertsScreen() {
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={colors.primary} />
           </View>
-            ) : (
+        ) : (
+          <>
+            {filteredRecent.length > 0 ? (
               <>
-                {filteredRecent.length > 0 ? (
-                  <>
-                    <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.sectionHeaderText}>RECENT</Text>
-                      <TouchableOpacity onPress={handleMarkAllRead}>
-                        <Text style={styles.markReadText}>Mark all as read</Text>
-                      </TouchableOpacity>
-                    </View>
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={styles.sectionHeaderText}>RECENT</Text>
+                  <TouchableOpacity onPress={handleMarkAllRead}>
+                    <Text style={styles.markReadText}>Mark all as read</Text>
+                  </TouchableOpacity>
+                </View>
 
-                    {filteredRecent.map(item => (
-                      <AlertCard key={item.id} item={item} />
-                    ))}
-                  </>
-                ) : (
-                  <View style={styles.caughtUpWrap}>
-                    <View style={styles.caughtUpCircle}>
-                      <Icon name="check" size={20} color={C.subtext} />
-                    </View>
-                    <Text style={styles.caughtUpText}>You're all caught up!</Text>
-                  </View>
-                )}
+                {filteredRecent.map(item => (
+                  <AlertCard key={item.id} item={item} />
+                ))}
               </>
+            ) : (
+              <View style={styles.caughtUpWrap}>
+                <View style={styles.caughtUpCircle}>
+                  <Icon name="check" size={20} color={C.subtext} />
+                </View>
+                <Text style={styles.caughtUpText}>You're all caught up!</Text>
+              </View>
             )}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

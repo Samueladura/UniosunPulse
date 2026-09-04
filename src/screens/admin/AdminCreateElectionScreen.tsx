@@ -34,7 +34,9 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
   const [category, setCategory] = useState<'SUG' | 'FACULTY' | 'DEPARTMENTAL'>(
     existingElection?.category || 'SUG',
   );
-  const [description, setDescription] = useState(existingElection?.description || '');
+  const [description, setDescription] = useState(
+    existingElection?.description || '',
+  );
   const [startTime, setStartTime] = useState(existingElection?.startTime || '');
   const [endTime, setEndTime] = useState(existingElection?.endTime || '');
 
@@ -48,25 +50,37 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
   const [creating, setCreating] = useState(false);
 
   const toISODateTime = (date: string, time: string): string => {
-    if (!date) return '';
+    if (!date) {
+      return '';
+    }
     const parts = date.split('/');
-    if (parts.length !== 3) return '';
+    if (parts.length !== 3) {
+      return '';
+    }
     const [dd, mm, yyyy] = parts;
     const cleaned = time.replace(/[^0-9:APMapm]/g, '').trim();
-    if (!cleaned) return `${yyyy}-${mm}-${dd}T00:00:00`;
+    if (!cleaned) {
+      return `${yyyy}-${mm}-${dd}T00:00:00`;
+    }
     const [timePart, period] = cleaned.split(/(?=[APMapm])/i);
     const [hStr, mStr] = timePart.split(':');
     let hours = parseInt(hStr || '0', 10);
     const minutes = parseInt(mStr || '0', 10);
     const upper = (period || '').toUpperCase();
-    if (upper === 'PM' && hours < 12) hours += 12;
-    if (upper === 'AM' && hours === 12) hours = 0;
+    if (upper === 'PM' && hours < 12) {
+      hours += 12;
+    }
+    if (upper === 'AM' && hours === 12) {
+      hours = 0;
+    }
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${yyyy}-${mm}-${dd}T${pad(hours)}:${pad(minutes)}:00`;
   };
 
   const parseISODateTime = (iso: string): {date: string; time: string} => {
-    if (!iso) return {date: '', time: ''};
+    if (!iso) {
+      return {date: '', time: ''};
+    }
     const [datePart, timePart] = iso.split('T');
     const [y, m, d] = (datePart || '').split('-');
     const [hStr, mStr] = (timePart || '').split(':');
@@ -96,7 +110,9 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
   const combinedEndTime = toISODateTime(endDate, endTimeOnly);
 
   // Pending candidates for new election
-  const [pendingCandidates, setPendingCandidates] = useState<PendingCandidate[]>([]);
+  const [pendingCandidates, setPendingCandidates] = useState<
+    PendingCandidate[]
+  >([]);
   const [candidateName, setCandidateName] = useState('');
   const [candidatePosition, setCandidatePosition] = useState('');
   const [candidateManifesto, setCandidateManifesto] = useState('');
@@ -302,7 +318,9 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
                   <Text style={styles.pendingCandidateName}>{c.name}</Text>
                   <Text style={styles.pendingCandidateMeta}>{c.position}</Text>
                   {c.manifesto ? (
-                    <Text style={styles.pendingCandidateManifesto} numberOfLines={1}>
+                    <Text
+                      style={styles.pendingCandidateManifesto}
+                      numberOfLines={1}>
                       {c.manifesto}
                     </Text>
                   ) : null}

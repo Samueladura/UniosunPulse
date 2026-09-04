@@ -1023,7 +1023,8 @@ export async function castVote(
     return {receiptId: result.receipt_hash, isDuplicate: result.is_duplicate};
   } catch (rpcError: any) {
     const message = rpcError?.message || '';
-    const isRpcMissing = message.includes('function') && message.includes('does not exist');
+    const isRpcMissing =
+      message.includes('function') && message.includes('does not exist');
 
     if (!isRpcMissing) {
       throw new Error(message || 'Failed to cast vote.');
@@ -1051,15 +1052,13 @@ export async function castVote(
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
 
-    const {error: insertError} = await supabase
-      .from('election_votes')
-      .insert({
-        election_id: electionId,
-        voter_id: user.id,
-        candidate_id: candidateId,
-        position_id: positionId,
-        receipt_hash: receiptHash,
-      });
+    const {error: insertError} = await supabase.from('election_votes').insert({
+      election_id: electionId,
+      voter_id: user.id,
+      candidate_id: candidateId,
+      position_id: positionId,
+      receipt_hash: receiptHash,
+    });
 
     if (insertError) {
       throw new Error(insertError.message || 'Failed to record vote.');

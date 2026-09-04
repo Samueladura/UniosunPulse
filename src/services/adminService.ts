@@ -256,7 +256,10 @@ export const adminService = {
       ]);
 
       if (alertError) {
-        console.error('Failed to insert broadcast alert:', JSON.stringify(alertError, null, 2));
+        console.error(
+          'Failed to insert broadcast alert:',
+          JSON.stringify(alertError, null, 2),
+        );
         return false;
       }
 
@@ -281,7 +284,10 @@ export const adminService = {
       ]);
 
       if (postError) {
-        console.error('Failed to insert broadcast post:', JSON.stringify(postError, null, 2));
+        console.error(
+          'Failed to insert broadcast post:',
+          JSON.stringify(postError, null, 2),
+        );
       }
 
       return true;
@@ -322,7 +328,11 @@ export const adminService = {
             .from('election_candidates')
             .select('vote_count')
             .eq('election_id', item.id);
-          totalVotes = cands?.reduce((sum: number, c: any) => sum + (c.vote_count || 0), 0) || 0;
+          totalVotes =
+            cands?.reduce(
+              (sum: number, c: any) => sum + (c.vote_count || 0),
+              0,
+            ) || 0;
         } catch {
           // ignore
         }

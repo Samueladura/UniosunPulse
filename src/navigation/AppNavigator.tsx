@@ -73,7 +73,11 @@ export type ElectionStackParamList = {
   ElectionHub: undefined;
   ElectionBallot: undefined;
   VerifyBallot: {candidate?: any; electionId?: string};
-  VoteSuccess: {receiptId?: string | null; isDuplicate?: boolean; electionId?: string};
+  VoteSuccess: {
+    receiptId?: string | null;
+    isDuplicate?: boolean;
+    electionId?: string;
+  };
   LiveResults: {electionId?: string};
 };
 
@@ -107,7 +111,13 @@ function ElectionTabIcon({color, size}: {color: string; size: number}) {
 function AlertsTabIcon({color, size}: {color: string; size: number}) {
   const {unreadCount} = useAlerts();
   return (
-    <View style={{width: size, height: size, justifyContent: 'center', alignItems: 'center'}}>
+    <View
+      style={{
+        width: size,
+        height: size,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
       <Icon name="bell" color={color} size={size} />
       {unreadCount > 0 && (
         <View
@@ -137,40 +147,40 @@ function MainTabs() {
   return (
     <AlertsProvider>
       <Tab.Navigator
-      initialRouteName="Feed"
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {fontSize: 11, fontWeight: '600'},
-      }}>
-      <Tab.Screen
-        name="Feed"
-        component={FeedScreen}
-        options={{tabBarIcon: FeedTabIcon}}
-      />
-      <Tab.Screen
-        name="Election"
-        component={ElectionStack}
-        options={{tabBarIcon: ElectionTabIcon}}
-      />
-      <Tab.Screen
-        name="Alerts"
-        component={AlertsScreen}
-        options={{tabBarIcon: AlertsTabIcon}}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={SettingsSlot}
-        options={{tabBarIcon: ProfileTabIcon}}
-      />
+        initialRouteName="Feed"
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarStyle: {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            height: 64,
+            paddingBottom: 8,
+            paddingTop: 6,
+          },
+          tabBarLabelStyle: {fontSize: 11, fontWeight: '600'},
+        }}>
+        <Tab.Screen
+          name="Feed"
+          component={FeedScreen}
+          options={{tabBarIcon: FeedTabIcon}}
+        />
+        <Tab.Screen
+          name="Election"
+          component={ElectionStack}
+          options={{tabBarIcon: ElectionTabIcon}}
+        />
+        <Tab.Screen
+          name="Alerts"
+          component={AlertsScreen}
+          options={{tabBarIcon: AlertsTabIcon}}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={SettingsSlot}
+          options={{tabBarIcon: ProfileTabIcon}}
+        />
       </Tab.Navigator>
     </AlertsProvider>
   );

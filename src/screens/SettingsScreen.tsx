@@ -900,8 +900,7 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
                   <View style={styles.blockedRow}>
                     <Image
                       source={{
-                        uri:
-                          item.avatar_url || '',
+                        uri: item.avatar_url || '',
                       }}
                       style={styles.blockedAvatar}
                     />

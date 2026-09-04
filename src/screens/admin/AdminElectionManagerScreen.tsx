@@ -22,12 +22,16 @@ import {
 import {supabase} from '../../services/supabase';
 
 const isElectionEnded = (election: AdminElection) => {
-  if (!election.endTime) return false;
+  if (!election.endTime) {
+    return false;
+  }
   return new Date(election.endTime) < new Date();
 };
 
 const formatDateTime = (iso: string | undefined) => {
-  if (!iso) return null;
+  if (!iso) {
+    return null;
+  }
   const date = new Date(iso);
   const day = date.getDate().toString().padStart(2, '0');
   const month = date.toLocaleString('en-US', {month: 'short'});
@@ -122,14 +126,14 @@ export default function AdminElectionManagerScreen({navigation}: any) {
   const loadElections = async () => {
     setLoading(true);
     const data = await adminService.getAdminElections();
-    
+
     const now = new Date();
     const endedIds = data
       .filter(
         e => e.status === 'active' && e.endTime && new Date(e.endTime) < now,
       )
       .map(e => e.id);
-    
+
     if (endedIds.length > 0) {
       await Promise.all(
         endedIds.map(id => adminService.updateElectionStatus(id, 'ended')),
