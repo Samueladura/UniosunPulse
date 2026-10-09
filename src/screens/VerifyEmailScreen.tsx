@@ -14,7 +14,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import AppButton from '../components/AppButton';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
-import {supabase, updateProfile} from '../services/supabase';
+import {backend, updateProfile} from '../services/backend';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
 
@@ -133,14 +133,14 @@ export default function VerifyEmailScreen({navigation, route}: Props) {
     setLoading(true);
 
     // Try type 'signup' first (for signUp verification code), fallback to 'email' (for OTP magic link code)
-    let {data, error} = await supabase.auth.verifyOtp({
+    let {data, error} = await backend.auth.verifyOtp({
       email,
       token: otp,
       type: 'signup',
     });
 
     if (error) {
-      const res = await supabase.auth.verifyOtp({
+      const res = await backend.auth.verifyOtp({
         email,
         token: otp,
         type: 'email',
@@ -152,6 +152,12 @@ export default function VerifyEmailScreen({navigation, route}: Props) {
     setLoading(false);
     if (error) {
       Alert.alert('Verification Failed', error.message);
+    } else if (data?.mfa_required) {
+      Alert.alert(
+        'Additional verification required',
+        'Continue signing in with your password and authenticator code.',
+      );
+      navigation.replace('SignIn');
     } else {
       if (fullName && data?.user) {
         await updateProfile({full_name: fullName});
@@ -162,7 +168,7 @@ export default function VerifyEmailScreen({navigation, route}: Props) {
 
   const handleResend = async () => {
     setResending(true);
-    const {error} = await supabase.auth.signInWithOtp({
+    const {error} = await backend.auth.signInWithOtp({
       email,
       options: {shouldCreateUser: false},
     });

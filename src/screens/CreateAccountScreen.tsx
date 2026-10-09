@@ -14,7 +14,7 @@ import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
-import {supabase, signInWithOtp} from '../services/supabase';
+import {backend, signInWithOtp} from '../services/backend';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
 
@@ -121,10 +121,10 @@ export default function CreateAccountScreen({navigation}: Props) {
       return;
     }
 
-    if (!password || password.length < 6) {
+    if (!password || password.length < 8) {
       Alert.alert(
         'Weak Password',
-        'Password must be at least 6 characters long.',
+        'Password must be at least 8 characters long.',
       );
       return;
     }
@@ -139,7 +139,7 @@ export default function CreateAccountScreen({navigation}: Props) {
 
     setLoading(true);
     try {
-      const {data: signUpData, error: signUpError} = await supabase.auth.signUp(
+      const {data: signUpData, error: signUpError} = await backend.auth.signUp(
         {
           email: trimmedEmail,
           password,
@@ -200,8 +200,8 @@ export default function CreateAccountScreen({navigation}: Props) {
           errorMsg.includes('unexpected_failure')
         ) {
           Alert.alert(
-            'Supabase Server Error (500)',
-            'Account creation failed on Supabase backend.\n\nThis is caused by either:\n1. Resend Sender Email/Domain not being verified in Resend Dashboard.\n2. Resend API key or SMTP configuration mismatch in Supabase.\n3. Missing database tables in Supabase SQL Editor.',
+            'Backend Server Error (500)',
+            'Account creation failed on the backend. Please try again later.',
           );
           return;
         }
@@ -210,7 +210,7 @@ export default function CreateAccountScreen({navigation}: Props) {
         return;
       }
 
-      // If user session is established automatically (e.g. Email Confirmation disabled in Supabase)
+      // Some sign-up flows may return an authenticated session immediately.
       if (signUpData?.session) {
         navigation.replace('Home');
         return;

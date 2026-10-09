@@ -14,7 +14,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {colors, spacing, radius, typography} from '../../theme/colors';
 import {adminService} from '../../services/adminService';
-import {supabase} from '../../services/supabase';
+import {backend} from '../../services/backend';
 
 const CATEGORIES = [
   'Academic',
@@ -31,7 +31,7 @@ export default function AdminBroadcastAlertScreen({navigation}: any) {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    const channel = supabase
+    const channel = backend
       .channel('admin:broadcast_alerts')
       .on(
         'postgres_changes',
@@ -56,7 +56,7 @@ export default function AdminBroadcastAlertScreen({navigation}: any) {
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, []);
 

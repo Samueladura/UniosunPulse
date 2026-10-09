@@ -12,7 +12,7 @@ import {
   UserPreferences,
   fetchUserProfile,
   savePreferences,
-} from '../services/supabase';
+} from '../services/backend';
 import {applyTheme, textSizeScale, spacing, radius, typography} from './colors';
 
 interface PreferencesContextValue {

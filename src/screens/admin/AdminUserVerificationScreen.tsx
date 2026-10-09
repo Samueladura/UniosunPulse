@@ -14,7 +14,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {colors, spacing, radius, typography} from '../../theme/colors';
 import {adminService, VerificationRequest} from '../../services/adminService';
-import {supabase} from '../../services/supabase';
+import {backend} from '../../services/backend';
 
 export default function AdminUserVerificationScreen({navigation}: any) {
   const [loading, setLoading] = useState(true);
@@ -23,7 +23,7 @@ export default function AdminUserVerificationScreen({navigation}: any) {
 
   useEffect(() => {
     loadVerifications();
-    const channel = supabase
+    const channel = backend
       .channel('admin:student_verifications')
       .on(
         'postgres_changes',
@@ -38,7 +38,7 @@ export default function AdminUserVerificationScreen({navigation}: any) {
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, []);
 

@@ -10,13 +10,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {usePrefs, useThemedStyles} from '../../theme/PreferencesContext';
-import {supabase} from '../../services/supabase';
+import {backend} from '../../services/backend';
 import {
   fetchElections,
   getTotalVotes,
   fetchElectionResults,
   type Election,
-} from '../../services/supabase';
+} from '../../services/backend';
 
 const LIGHT_COLORS = {
   bg: '#F5F6F8',
@@ -385,7 +385,7 @@ export default function ElectionHubScreen({navigation}: any) {
       if (active && electionsData.length) {
         setElections(electionsData);
         const votedCount = await getTotalVotes(electionsData[0].id);
-        const {count: voterCount} = await supabase
+        const {count: voterCount} = await backend
           .from('profiles')
           .select('*', {count: 'exact', head: true});
         setTotalVotes(votedCount);
@@ -403,7 +403,7 @@ export default function ElectionHubScreen({navigation}: any) {
       return;
     }
 
-    const channel = supabase
+    const channel = backend
       .channel('election-hub')
       .on(
         'postgres_changes',
@@ -415,7 +415,7 @@ export default function ElectionHubScreen({navigation}: any) {
         async () => {
           const activeElection = elections[0];
           const voted = await getTotalVotes(activeElection.id);
-          const {count: voters} = await supabase
+          const {count: voters} = await backend
             .from('profiles')
             .select('*', {count: 'exact', head: true});
           setTotalVotes(voted);
@@ -425,7 +425,7 @@ export default function ElectionHubScreen({navigation}: any) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, [elections]);
 
@@ -433,7 +433,7 @@ export default function ElectionHubScreen({navigation}: any) {
     totalVoters > 0 ? Math.round((totalVotes / totalVoters) * 100) : 0;
 
   const loadRecentResults = async () => {
-    const {data: endedElections} = await supabase
+    const {data: endedElections} = await backend
       .from('elections')
       .select('id, title, faculty, end_at')
       .eq('status', 'ended')
@@ -463,7 +463,7 @@ export default function ElectionHubScreen({navigation}: any) {
   useEffect(() => {
     loadRecentResults();
 
-    const channel = supabase
+    const channel = backend
       .channel('election-recent-results')
       .on(
         'postgres_changes',
@@ -486,7 +486,7 @@ export default function ElectionHubScreen({navigation}: any) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, []);
 

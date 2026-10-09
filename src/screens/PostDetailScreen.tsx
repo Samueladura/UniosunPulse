@@ -12,22 +12,24 @@ import {
   Alert,
 } from 'react-native';
 import {colors} from '../theme/colors.ts';
-import {supabase} from '../services/supabase';
+import {backend} from '../services/backend';
 import Icon from 'react-native-vector-icons/Feather';
+import PostMedia from '../components/PostMedia';
 import {usePrefs, useThemedStyles} from '../theme/PreferencesContext';
 import {
   fetchPostById,
-  toggleLike,
+  setPostLiked,
   fetchComments,
   createComment as apiCreateComment,
   deletePost as apiDeletePost,
-  deleteComment as apiDeleteComment,
   unfollowUser,
   followUser,
   type Post,
-} from '../services/supabase';
+} from '../services/backend';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
+import {fetchSavedStatus, setItemSaved} from '../services/campus';
+import {usePosts} from '../context/PostsContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PostDetail'>;
 
@@ -102,6 +104,7 @@ const getStyles = (C: typeof LIGHT_COLORS | typeof DARK_COLORS) =>
     authorAvatar: {width: 42, height: 42, borderRadius: 21},
     authorName: {fontSize: 14, fontWeight: '700', color: C.text},
     authorMeta: {fontSize: 12, color: C.subtext, marginTop: 2},
+    imageWrap: {marginHorizontal: 16, borderRadius: 14, overflow: 'hidden'},
     followButton: {
       backgroundColor: C.green,
       paddingHorizontal: 16,
@@ -114,8 +117,6 @@ const getStyles = (C: typeof LIGHT_COLORS | typeof DARK_COLORS) =>
     followButtonText: {color: '#FFFFFF', fontSize: 12, fontWeight: '700'},
     followingButtonText: {color: C.text},
 
-    imageWrap: {marginHorizontal: 16, borderRadius: 14, overflow: 'hidden'},
-    postImage: {width: '100%', height: 190, backgroundColor: C.border},
     tagBadge: {
       position: 'absolute',
       top: 10,
@@ -278,6 +279,7 @@ function formatCount(value: number): string {
 export default function PostDetailScreen({navigation, route}: Props) {
   const C = usePrefs().isDark ? DARK_COLORS : LIGHT_COLORS;
   const styles = useThemedStyles(() => getStyles(C), []);
+  const {removeComment} = usePosts();
 
   const postParam = route.params?.post as
     | (Omit<Post, 'liked'> & {
@@ -290,6 +292,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
 
   const [liked, setLiked] = useState<boolean>(false);
   const [saved, setSaved] = useState<boolean>(false);
+  const [savingBookmark, setSavingBookmark] = useState(false);
   const [isFollowingAuthor, setIsFollowingAuthor] = useState<boolean>(false);
   const [likeCountValue, setLikeCountValue] = useState<number>(
     typeof postParam?.like_count === 'number' ? postParam.like_count : 0,
@@ -315,12 +318,24 @@ export default function PostDetailScreen({navigation, route}: Props) {
   const postBody =
     postParam?.body ||
     "Hello everyone! I've just uploaded the consolidated study materials for the upcoming PSC 401 Mid-semester exams. These include comprehensive lecture notes from the past six weeks, curated research papers on modern political theories, and a set of practice questions to help you prepare.";
-  const postImage = postParam?.image || null;
+  const postImage = _postDetail?.image || postParam?.image || null;
+  const postVideo = _postDetail?.video || postParam?.video || null;
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       if (postParam?.id) {
+        try {
+          const savedStatus = await fetchSavedStatus('post', postParam.id);
+          if (active) setSaved(savedStatus.saved);
+        } catch (error) {
+          if (active) {
+            Alert.alert(
+              'Unable to load saved status',
+              error instanceof Error ? error.message : 'Please try again.',
+            );
+          }
+        }
         setIsLoadingPost(true);
         const row = await fetchPostById(postParam.id);
         if (active && row) {
@@ -350,7 +365,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
     (async () => {
       const {
         data: {user},
-      } = await supabase.auth.getUser();
+      } = await backend.auth.getUser();
       if (user) {
         setCurrentUserId(user.id);
         setCurrentUserEmail(user.email || null);
@@ -366,9 +381,38 @@ export default function PostDetailScreen({navigation, route}: Props) {
     if (!postParam?.id) {
       return;
     }
+    const previousLiked = liked;
+    const previousCount = likeCountValue;
     setLiked(prev => !prev);
-    setLikeCountValue(prev => (liked ? prev - 1 : prev + 1));
-    await toggleLike(postParam.id);
+    setLikeCountValue(prev => Math.max(0, prev + (liked ? -1 : 1)));
+    try {
+      const result = await setPostLiked(postParam.id, !previousLiked);
+      setLiked(result.liked);
+      setLikeCountValue(result.like_count);
+    } catch (error) {
+      setLiked(previousLiked);
+      setLikeCountValue(previousCount);
+      Alert.alert(
+        'Like could not be updated',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    }
+  };
+
+  const handleSaveToggle = async () => {
+    if (!postParam?.id || savingBookmark) return;
+    setSavingBookmark(true);
+    try {
+      const result = await setItemSaved('post', postParam.id, !saved);
+      setSaved(result.saved);
+    } catch (error) {
+      Alert.alert(
+        'Unable to update saved posts',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setSavingBookmark(false);
+    }
   };
 
   const handleFollowToggle = async () => {
@@ -396,16 +440,33 @@ export default function PostDetailScreen({navigation, route}: Props) {
       body: commentText.trim(),
       isAuthor: true,
     };
-    const commentRes = await apiCreateComment(postParam.id, commentText.trim());
-    if (commentRes) {
-      setCommentsList(prev => [...prev, newComment]);
-      setCommentText('');
+    try {
+      const commentRes = await apiCreateComment(
+        postParam.id,
+        commentText.trim(),
+      );
+      if (commentRes) {
+        setCommentsList(prev => [...prev, newComment]);
+        setCommentText('');
+      }
+    } catch (error) {
+      Alert.alert(
+        'Comment could not be sent',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
     }
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    await apiDeleteComment(commentId);
-    setCommentsList(prev => prev.filter(c => c.id !== commentId));
+    try {
+      await removeComment(commentId);
+      setCommentsList(prev => prev.filter(c => c.id !== commentId));
+    } catch (error) {
+      Alert.alert(
+        'Comment could not be deleted',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    }
   };
 
   const openProfile = () => {
@@ -493,9 +554,9 @@ export default function PostDetailScreen({navigation, route}: Props) {
           )}
         </View>
 
-        {postImage ? (
+        {postImage || postVideo ? (
           <View style={styles.imageWrap}>
-            <Image source={{uri: postImage}} style={styles.postImage} />
+            <PostMedia image={postImage} video={postVideo} />
             <View style={styles.tagBadge}>
               <Text style={styles.tagBadgeText}>{postTag}</Text>
             </View>
@@ -547,7 +608,8 @@ export default function PostDetailScreen({navigation, route}: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionItem}
-            onPress={() => setSaved(prev => !prev)}>
+            disabled={savingBookmark}
+            onPress={handleSaveToggle}>
             <Icon name="bookmark" size={18} color={saved ? C.green : C.text} />
             <Text
               style={
@@ -681,7 +743,7 @@ function CommentItem({
 }
 
 async function hasUserLiked(postId: string): Promise<boolean> {
-  const {data} = await supabase
+  const {data} = await backend
     .from('likes')
     .select('id')
     .eq('post_id', postId)

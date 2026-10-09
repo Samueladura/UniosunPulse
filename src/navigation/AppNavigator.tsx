@@ -1,5 +1,5 @@
-import React, {useEffect, useState} from 'react';
-import {supabase} from '../services/supabase';
+import React, {useEffect, useRef, useState} from 'react';
+import {backend} from '../services/backend';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SignInScreen from '../screens/SignInScreen';
 import CreateAccountScreen from '../screens/CreateAccountScreen';
@@ -16,6 +16,13 @@ import VerifyBallotScreen from '../screens/election/VerifyBallotScreen';
 import VoteSuccessScreen from '../screens/election/VoteSuccessScreen';
 import LiveResultsScreen from '../screens/election/LiveResultsScreen';
 import VerifyEmailScreen from '../screens/VerifyEmailScreen';
+import PasswordResetScreen from '../screens/PasswordResetScreen';
+import SearchScreen from '../screens/SearchScreen';
+import EventsScreen from '../screens/EventsScreen';
+import MarketplaceScreen from '../screens/MarketplaceScreen';
+import SavedScreen from '../screens/SavedScreen';
+import CareerBoardScreen from '../screens/CareerBoardScreen';
+import ClubsScreen from '../screens/ClubsScreen';
 
 // Admin Suite Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -25,12 +32,15 @@ import AdminElectionManagerScreen from '../screens/admin/AdminElectionManagerScr
 import AdminCreateElectionScreen from '../screens/admin/AdminCreateElectionScreen';
 import AdminBroadcastAlertScreen from '../screens/admin/AdminBroadcastAlertScreen';
 import AdminMyPostsScreen from '../screens/admin/AdminMyPostsScreen';
+import AdminEventsScreen from '../screens/admin/AdminEventsScreen';
+import AdminMarketplaceReportsScreen from '../screens/admin/AdminMarketplaceReportsScreen';
 
-import {PostsProvider} from '../context/PostsContext';
 import {AlertsProvider, useAlerts} from '../context/AlertsContext';
+import {setSessionExpiredHandler} from '../services/api';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../theme/colors.ts';
 import {View} from 'react-native';
+import {createNavigationContainerRef} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
   NativeStackScreenProps,
@@ -52,9 +62,16 @@ export type RootStackParamList = {
   SignIn: undefined;
   CreateAccount: undefined;
   VerifyEmail: {email: string; fullName?: string};
+  PasswordReset: undefined;
   Welcome: undefined;
   Home: undefined;
   NewPost: undefined;
+  Search: undefined;
+  Events: undefined;
+  Marketplace: undefined;
+  Saved: undefined;
+  CareerBoard: undefined;
+  Clubs: undefined;
   Settings: undefined;
   PostDetail: {post?: any};
   UserProfile: {userId: string};
@@ -66,8 +83,13 @@ export type RootStackParamList = {
   AdminCreateElection: undefined;
   AdminBroadcastAlert: undefined;
   AdminMyPosts: undefined;
+  AdminEvents: undefined;
+  AdminMarketplaceReports: undefined;
   AdminLiveResults: {electionId?: string};
 };
+
+export const navigationRef =
+  createNavigationContainerRef<RootStackParamList>();
 
 export type ElectionStackParamList = {
   ElectionHub: undefined;
@@ -190,15 +212,22 @@ export default function AppNavigator() {
   const [initialRoute, setInitialRoute] =
     useState<keyof RootStackParamList>('Onboarding');
   const [checking, setChecking] = useState(true);
+  const sessionExpiredDuringStartup = useRef(false);
 
   useEffect(() => {
     let active = true;
     (async () => {
       const {
         data: {session},
-      } = await supabase.auth.getSession();
+      } = await backend.auth.getSession();
       if (active) {
-        setInitialRoute(session ? 'Home' : 'Onboarding');
+        setInitialRoute(
+          sessionExpiredDuringStartup.current
+            ? 'SignIn'
+            : session
+              ? 'Home'
+              : 'Onboarding',
+        );
         setChecking(false);
       }
     })();
@@ -207,56 +236,81 @@ export default function AppNavigator() {
     };
   }, []);
 
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      sessionExpiredDuringStartup.current = true;
+      setInitialRoute('SignIn');
+      setChecking(false);
+      if (navigationRef.isReady()) {
+        navigationRef.resetRoot({
+          index: 0,
+          routes: [{name: 'SignIn'}],
+        });
+      }
+    });
+    return () => setSessionExpiredHandler(null);
+  }, []);
+
   if (checking) {
     return null;
   }
 
   return (
-    <PostsProvider>
-      <Stack.Navigator
-        initialRouteName={initialRoute}
-        screenOptions={{headerShown: false}}>
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-        <Stack.Screen name="SignIn" component={SignInScreen} />
-        <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
-        <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
-        <Stack.Screen name="Welcome" component={HomeScreen} />
-        <Stack.Screen name="Home" component={MainTabs} />
-        <Stack.Screen
-          name="NewPost"
-          component={NewPostScreen}
-          options={{presentation: 'modal'}}
-        />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-        <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+    <Stack.Navigator
+      initialRouteName={initialRoute}
+      screenOptions={{headerShown: false}}>
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+      <Stack.Screen name="SignIn" component={SignInScreen} />
+      <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
+      <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+      <Stack.Screen name="PasswordReset" component={PasswordResetScreen} />
+      <Stack.Screen name="Welcome" component={HomeScreen} />
+      <Stack.Screen name="Home" component={MainTabs} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="Events" component={EventsScreen} />
+      <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
+      <Stack.Screen name="Saved" component={SavedScreen} />
+      <Stack.Screen name="CareerBoard" component={CareerBoardScreen} />
+      <Stack.Screen name="Clubs" component={ClubsScreen} />
+      <Stack.Screen
+        name="NewPost"
+        component={NewPostScreen}
+        options={{presentation: 'modal'}}
+      />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+      <Stack.Screen name="UserProfile" component={UserProfileScreen} />
 
-        {/* Admin Navigation Screens */}
-        <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-        <Stack.Screen
-          name="AdminUserVerification"
-          component={AdminUserVerificationScreen}
-        />
-        <Stack.Screen
-          name="AdminContentModeration"
-          component={AdminContentModerationScreen}
-        />
-        <Stack.Screen
-          name="AdminElectionManager"
-          component={AdminElectionManagerScreen}
-        />
-        <Stack.Screen
-          name="AdminCreateElection"
-          component={AdminCreateElectionScreen}
-        />
-        <Stack.Screen
-          name="AdminBroadcastAlert"
-          component={AdminBroadcastAlertScreen}
-        />
-        <Stack.Screen name="AdminMyPosts" component={AdminMyPostsScreen} />
-        <Stack.Screen name="AdminLiveResults" component={LiveResultsScreen} />
-      </Stack.Navigator>
-    </PostsProvider>
+      {/* Admin Navigation Screens */}
+      <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+      <Stack.Screen
+        name="AdminUserVerification"
+        component={AdminUserVerificationScreen}
+      />
+      <Stack.Screen
+        name="AdminContentModeration"
+        component={AdminContentModerationScreen}
+      />
+      <Stack.Screen
+        name="AdminElectionManager"
+        component={AdminElectionManagerScreen}
+      />
+      <Stack.Screen
+        name="AdminCreateElection"
+        component={AdminCreateElectionScreen}
+      />
+      <Stack.Screen
+        name="AdminBroadcastAlert"
+        component={AdminBroadcastAlertScreen}
+      />
+      <Stack.Screen name="AdminMyPosts" component={AdminMyPostsScreen} />
+      <Stack.Screen name="AdminEvents" component={AdminEventsScreen} />
+      <Stack.Screen
+        name="AdminMarketplaceReports"
+        component={AdminMarketplaceReportsScreen}
+      />
+      <Stack.Screen name="AdminLiveResults" component={LiveResultsScreen} />
+    </Stack.Navigator>
   );
 }
 

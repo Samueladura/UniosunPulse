@@ -14,7 +14,7 @@ import AppButton from '../components/AppButton';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
 import {interests, suggestedFollows} from '../data/mockData';
-import {followUser} from '../services/supabase';
+import {followUser} from '../services/backend';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
 

@@ -12,10 +12,10 @@ import {useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import {usePrefs, useThemedStyles} from '../../theme/PreferencesContext';
 import {
-  supabase,
+  backend,
   fetchElectionResults,
   fetchBallotReceipts,
-} from '../../services/supabase';
+} from '../../services/backend';
 
 interface ResultRow {
   id: string;
@@ -350,7 +350,7 @@ export default function LiveResultsScreen({navigation, route}: any) {
       return;
     }
 
-    const channel = supabase
+    const channel = backend
       .channel('live-results')
       .on(
         'postgres_changes',
@@ -377,7 +377,7 @@ export default function LiveResultsScreen({navigation, route}: any) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, [electionId, refreshResults]);
 

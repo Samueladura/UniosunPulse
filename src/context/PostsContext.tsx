@@ -4,15 +4,19 @@ import React, {
   useState,
   useEffect,
   ReactNode,
+  useRef,
+  useCallback,
 } from 'react';
-import {supabase} from '../services/supabase';
+import {backend} from '../services/backend';
 import {
   Post,
-  fetchPosts,
-  toggleLike as doToggleLike,
+  Comment,
+  fetchFeedPage,
   createPost as apiCreatePost,
-  createComment as apiCreateComment,
-} from '../services/supabase';
+  setPostLiked,
+  createFeedComment,
+  deleteComment as apiDeleteComment,
+} from '../services/backend';
 
 export interface PostWithMeta extends Post {
   author: string;
@@ -27,6 +31,9 @@ export interface PostWithMeta extends Post {
 interface PostsContextValue {
   posts: PostWithMeta[];
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  feedError: string | null;
   addPost: (
     post: Omit<
       PostWithMeta,
@@ -41,8 +48,10 @@ interface PostsContextValue {
     >,
   ) => Promise<void>;
   toggleLike: (id: string) => Promise<void>;
-  addComment: (postId: string, text: string) => Promise<void>;
-  refreshFeed: () => Promise<void>;
+  addComment: (postId: string, text: string) => Promise<Comment>;
+  removeComment: (commentId: string) => Promise<void>;
+  refreshFeed: (tag?: string) => Promise<void>;
+  loadMorePosts: () => Promise<void>;
 }
 
 const PostsContext = createContext<PostsContextValue | null>(null);
@@ -57,50 +66,97 @@ function formatCount(value: number): string {
   return `${value}`;
 }
 
+function mapFeedPost(row: Post): PostWithMeta {
+  return {
+    ...row,
+    author: row.author_name,
+    avatar: row.avatar || '',
+    time: formatTimeAgo(row.created_at),
+    likes: formatCount(row.like_count),
+    comments: row.comment_count,
+    liked: Boolean(row.liked),
+    likeCount: row.like_count,
+  };
+}
+
 export function PostsProvider({children}: {children: ReactNode}) {
   const [posts, setPosts] = useState<PostWithMeta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const cursorRef = useRef<string | null>(null);
+  const tagRef = useRef<string | undefined>(undefined);
+  const requestIdRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const likingRef = useRef(new Set<string>());
 
-  const refreshFeed = async () => {
+  const refreshFeed = useCallback(async (tag?: string) => {
+    tagRef.current = tag;
+    const requestId = ++requestIdRef.current;
+    cursorRef.current = null;
+    setHasMore(true);
+    setLoading(true);
+    setFeedError(null);
     try {
-      const rows = await fetchPosts();
-      const mapped: PostWithMeta[] = rows.map(row => ({
-        id: row.id,
-        author_id: row.author_id,
-        author_name: row.author_name,
-        author: row.author_name,
-        avatar: row.avatar || '',
-        title: row.title,
-        body: row.body || '',
-        image: row.image || '',
-        tag: row.tag,
-        like_count: row.like_count,
-        comment_count: row.comment_count,
-        time: formatTimeAgo(row.created_at),
-        likes: formatCount(row.like_count),
-        comments: row.comment_count,
-        liked: false,
-        likeCount: row.like_count,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-      }));
-      setPosts(mapped);
-    } catch (e) {
-      // keep existing posts if refresh fails
+      const page = await fetchFeedPage(tag);
+      if (requestId !== requestIdRef.current) return;
+      setPosts(page.posts.map(mapFeedPost));
+      cursorRef.current = page.next_cursor;
+      setHasMore(page.has_more);
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      setFeedError(
+        error instanceof Error ? error.message : 'Unable to load the feed.',
+      );
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
+
+  const loadMorePosts = useCallback(async () => {
+    if (!hasMore || loadingMoreRef.current || !cursorRef.current) return;
+    const requestId = requestIdRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await fetchFeedPage(tagRef.current, cursorRef.current);
+      if (requestId !== requestIdRef.current) return;
+      setPosts(current => {
+        const existingIds = new Set(current.map(post => post.id));
+        return [
+          ...current,
+          ...page.posts
+            .filter(post => !existingIds.has(post.id))
+            .map(mapFeedPost),
+        ];
+      });
+      cursorRef.current = page.next_cursor;
+      setHasMore(page.has_more);
+    } catch (error) {
+      if (requestId !== requestIdRef.current) return;
+      setFeedError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load more feed posts.',
+      );
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [hasMore]);
 
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: ReturnType<typeof backend.channel> | null = null;
     let active = true;
 
     (async () => {
       await refreshFeed();
 
       try {
-        channel = supabase
+        channel = backend
           .channel('public:posts')
           .on(
             'postgres_changes',
@@ -124,7 +180,7 @@ export function PostsProvider({children}: {children: ReactNode}) {
     return () => {
       active = false;
       if (channel) {
-        supabase.removeChannel(channel);
+        backend.removeChannel(channel);
       }
     };
   }, []);
@@ -146,6 +202,7 @@ export function PostsProvider({children}: {children: ReactNode}) {
       title: post.title,
       body: post.body ?? '',
       image: post.image ?? undefined,
+      video: post.video ?? undefined,
       tag: post.tag,
       author_id: post.author_id,
       author_name: post.author_name,
@@ -169,41 +226,111 @@ export function PostsProvider({children}: {children: ReactNode}) {
     }
   };
 
-  const toggleLike = async (id: string) => {
-    const liked = await doToggleLike(id);
-    setPosts(prev =>
-      prev.map(p => {
-        const newCount = liked ? p.likeCount + 1 : Math.max(p.likeCount - 1, 0);
-        return {
-          ...p,
-          liked,
-          likeCount: newCount,
-          likes: formatCount(newCount),
-        };
-      }),
-    );
-  };
-
-  const addComment = async (postId: string, text: string) => {
-    const result = await apiCreateComment(postId, text);
-    if (result) {
+  const toggleLike = useCallback(
+    async (id: string) => {
+      if (likingRef.current.has(id)) return;
+      const current = posts.find(post => post.id === id);
+      if (!current) return;
+      const previousLiked = current.liked;
+      const previousCount = current.likeCount;
+      const nextLiked = !previousLiked;
+      likingRef.current.add(id);
       setPosts(prev =>
-        prev.map(p =>
-          p.id === postId
+        prev.map(post =>
+          post.id === id
             ? {
-                ...p,
-                comments: p.comments + 1,
-                comment_count: p.comment_count + 1,
+                ...post,
+                liked: nextLiked,
+                likeCount: Math.max(0, previousCount + (nextLiked ? 1 : -1)),
+                likes: formatCount(
+                  Math.max(0, previousCount + (nextLiked ? 1 : -1)),
+                ),
               }
-            : p,
+            : post,
         ),
       );
-    }
-  };
+      try {
+        const result = await setPostLiked(id, nextLiked);
+        setPosts(prev =>
+          prev.map(post =>
+            post.id === id
+              ? {
+                  ...post,
+                  liked: result.liked,
+                  likeCount: result.like_count,
+                  like_count: result.like_count,
+                  likes: formatCount(result.like_count),
+                }
+              : post,
+          ),
+        );
+      } catch (error) {
+        setPosts(prev =>
+          prev.map(post =>
+            post.id === id
+              ? {
+                  ...post,
+                  liked: previousLiked,
+                  likeCount: previousCount,
+                  likes: formatCount(previousCount),
+                }
+              : post,
+          ),
+        );
+        throw error;
+      } finally {
+        likingRef.current.delete(id);
+      }
+    },
+    [posts],
+  );
+
+  const addComment = useCallback(async (postId: string, text: string) => {
+    const result = await createFeedComment(postId, text);
+    setPosts(prev =>
+      prev.map(post =>
+        post.id === postId
+          ? {
+              ...post,
+              comments: post.comments + 1,
+              comment_count: post.comment_count + 1,
+            }
+          : post,
+      ),
+    );
+    return result;
+  }, []);
+
+  const removeComment = useCallback(async (commentId: string) => {
+    const result = await apiDeleteComment(commentId);
+    setPosts(prev =>
+      prev.map(post =>
+        post.id === result.post_id
+          ? {
+              ...post,
+              comments: result.comment_count,
+              comment_count: result.comment_count,
+            }
+          : post,
+      ),
+    );
+  }, []);
 
   return (
     <PostsContext.Provider
-      value={{posts, loading, addPost, toggleLike, addComment, refreshFeed}}>
+      value={{
+        posts,
+        loading,
+        loadingMore,
+        hasMore,
+        feedError,
+        addPost,
+        toggleLike,
+        addComment,
+        removeComment,
+        refreshFeed,
+        loadMorePosts,
+      }}>
       {children}
     </PostsContext.Provider>
   );

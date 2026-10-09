@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   Platform,
   ImageStyle,
-  Alert,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -16,7 +15,7 @@ import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
-import {supabase, recordLoginEvent} from '../services/supabase';
+import {backend, recordLoginEvent} from '../services/backend';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
 
@@ -27,6 +26,9 @@ export default function SignInScreen({navigation}: Props) {
   const [password, setPassword] = useState('');
   const [staySignedIn, setStaySignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const styles = useThemedStyles(() =>
     StyleSheet.create({
@@ -75,6 +77,12 @@ export default function SignInScreen({navigation}: Props) {
         color: colors.textSecondary,
         marginTop: 2,
         marginBottom: spacing.lg,
+      },
+      formError: {
+        color: colors.danger,
+        fontSize: 13,
+        lineHeight: 19,
+        marginTop: spacing.sm,
       },
       forgot: {color: colors.primary, fontSize: 12, fontWeight: '700'},
       checkboxRow: {
@@ -130,36 +138,69 @@ export default function SignInScreen({navigation}: Props) {
   );
 
   const handleSignIn = async () => {
-    const cleanEmail = email.trim().toLowerCase();
-    const isAdminAccount =
-      cleanEmail === 'official.uniosun@edu.ng' && password === 'adminaccess';
-
-    setLoading(true);
-    const {error} = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    });
-    setLoading(false);
-
-    if (isAdminAccount) {
-      recordLoginEvent({
-        device: Platform.OS === 'ios' ? 'iPhone' : 'Android',
-      });
-      await supabase.auth.updateUser({
-        data: {
-          full_name: 'Campus Admin(Official)',
-          role: 'admin',
-        },
-      });
-      navigation.replace('AdminDashboard');
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!mfaChallenge && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setFormError('Enter a valid email address.');
       return;
     }
+    if (!mfaChallenge && password.length === 0) {
+      setFormError('Enter your password.');
+      return;
+    }
+    if (mfaChallenge && !/^\d{6}$/.test(mfaCode)) {
+      setFormError('Enter the 6-digit code from your authenticator app.');
+      return;
+    }
+    setLoading(true);
+    setFormError(null);
 
-    if (error) {
-      Alert.alert('Sign In Failed', error.message);
-    } else {
+    try {
+      const result = mfaChallenge
+        ? await backend.auth.completeMfaSignIn({
+            challengeId: mfaChallenge,
+            code: mfaCode,
+          })
+        : await backend.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
+
+      if (result.error) {
+        setFormError(result.error.message);
+        return;
+      }
+
+      if (result.data?.mfa_required && result.data?.mfa_challenge) {
+        setMfaChallenge(result.data.mfa_challenge);
+        setMfaCode('');
+        return;
+      }
+
+      setMfaChallenge(null);
+      setMfaCode('');
       recordLoginEvent({device: Platform.OS === 'ios' ? 'iPhone' : 'Android'});
+      const {
+        data: {user},
+      } = await backend.auth.getUser();
+      if (!user) {
+        setFormError(
+          'Sign-in succeeded, but your user session could not be loaded. Please try again.',
+        );
+        return;
+      }
+      if (user.user_metadata?.role === 'admin') {
+        navigation.replace('AdminDashboard');
+        return;
+      }
       navigation.replace('Home');
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to sign in. Check your connection and try again.',
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -174,6 +215,7 @@ export default function SignInScreen({navigation}: Props) {
             style={styles.logo as ImageStyle}
             resizeMode="contain"
           />
+          {formError ? <Text style={styles.formError}>{formError}</Text> : null}
         </View>
 
         <Text style={styles.title}>UniOsun Pulse</Text>
@@ -197,53 +239,77 @@ export default function SignInScreen({navigation}: Props) {
           />
 
           <AppInput
-            label="Password"
-            leftIcon="lock"
-            placeholder="••••••••"
-            isPassword
+            label={mfaChallenge ? 'Authenticator code' : 'Password'}
+            leftIcon={mfaChallenge ? 'key' : 'lock'}
+            placeholder={mfaChallenge ? '6-digit code' : '••••••••'}
+            isPassword={!mfaChallenge}
+            keyboardType={mfaChallenge ? 'number-pad' : 'default'}
+            maxLength={mfaChallenge ? 6 : undefined}
             uppercaseLabel
-            value={password}
-            onChangeText={setPassword}
+            value={mfaChallenge ? mfaCode : password}
+            onChangeText={
+              mfaChallenge
+                ? value => setMfaCode(value.replace(/\D/g, '').slice(0, 6))
+                : setPassword
+            }
             rightLabel={
-              <TouchableOpacity>
-                <Text style={styles.forgot}>Forgot password?</Text>
-              </TouchableOpacity>
+              !mfaChallenge ? (
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('PasswordReset')}>
+                  <Text style={styles.forgot}>Forgot password?</Text>
+                </TouchableOpacity>
+              ) : undefined
             }
           />
 
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setStaySignedIn(!staySignedIn)}>
-            <View style={[styles.checkbox, staySignedIn && styles.checkboxOn]}>
-              {staySignedIn && (
-                <Icon name="check" size={12} color={colors.white} />
-              )}
-            </View>
-            <Text style={styles.checkboxLabel}>Stay signed in</Text>
-          </TouchableOpacity>
+          {mfaChallenge ? (
+            <TouchableOpacity
+              onPress={() => {
+                setMfaChallenge(null);
+                setMfaCode('');
+              }}>
+              <Text style={styles.forgot}>Cancel verification</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={() => setStaySignedIn(!staySignedIn)}>
+              <View
+                style={[styles.checkbox, staySignedIn && styles.checkboxOn]}>
+                {staySignedIn && (
+                  <Icon name="check" size={12} color={colors.white} />
+                )}
+              </View>
+              <Text style={styles.checkboxLabel}>Stay signed in</Text>
+            </TouchableOpacity>
+          )}
 
           <AppButton
-            label="Sign In"
+            label={mfaChallenge ? 'Verify & Sign In' : 'Sign In'}
             onPress={handleSignIn}
             loading={loading}
             icon={<Icon name="log-in" size={18} color={colors.white} />}
             style={{marginTop: spacing.md}}
           />
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
+          {!mfaChallenge ? (
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+          ) : null}
 
-          <AppButton
-            label="Create Account"
-            variant="outline"
-            style={{borderColor: colors.primary}}
-            textStyle={{color: colors.primary}}
-            icon={<Icon name="user-check" size={18} color={colors.primary} />}
-            onPress={() => navigation.navigate('CreateAccount')}
-          />
+          {!mfaChallenge ? (
+            <AppButton
+              label="Create Account"
+              variant="outline"
+              style={{borderColor: colors.primary}}
+              textStyle={{color: colors.primary}}
+              icon={<Icon name="user-check" size={18} color={colors.primary} />}
+              onPress={() => navigation.navigate('CreateAccount')}
+            />
+          ) : null}
         </View>
 
         <Text style={styles.footerText}>

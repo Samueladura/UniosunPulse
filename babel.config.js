@@ -7,7 +7,7 @@ module.exports = {
         moduleName: '@env',
         path: '.env',
         blacklist: null,
-        whitelist: null,
+        whitelist: ['API_BASE_URL'],
         safe: false,
         allowUndefined: true,
       },

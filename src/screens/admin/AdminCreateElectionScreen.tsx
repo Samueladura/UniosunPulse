@@ -154,33 +154,39 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
     }
 
     setCreating(true);
-    const newElec = await adminService.createElection(
-      title.trim(),
-      category,
-      description.trim(),
-      combinedStartTime || undefined,
-      combinedEndTime || undefined,
-      maxCandidates ? parseInt(maxCandidates, 10) : undefined,
-    );
-    setCreating(false);
+    try {
+      const newElec = await adminService.createElection(
+        title.trim(),
+        category,
+        description.trim(),
+        combinedStartTime || undefined,
+        combinedEndTime || undefined,
+        maxCandidates ? parseInt(maxCandidates, 10) : undefined,
+      );
 
-    if (pendingCandidates.length > 0 && newElec.id) {
-      for (const c of pendingCandidates) {
+      for (const candidate of pendingCandidates) {
         await adminService.addCandidate(
           newElec.id,
-          c.name,
-          c.position,
-          c.manifesto || undefined,
-          c.avatar || undefined,
+          candidate.name,
+          candidate.position,
+          candidate.manifesto || undefined,
+          candidate.avatar || undefined,
         );
       }
-    }
 
-    Alert.alert(
-      'Election Created',
-      'The election session and candidates have been saved.',
-    );
-    navigation.goBack();
+      Alert.alert(
+        'Election Created',
+        'The election session and candidates have been saved.',
+      );
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert(
+        'Election Creation Failed',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (

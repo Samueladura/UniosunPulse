@@ -1,10 +1,468 @@
-import 'react-native-url-polyfill/auto';
-import {createClient} from '@supabase/supabase-js';
-import {SUPABASE_URL, SUPABASE_ANON_KEY} from '@env';
+import {
+  getCurrentSession,
+  getCurrentUser,
+  updateAuthUser,
+  signInWithPassword as apiSignInWithPassword,
+  requestPasswordReset,
+  completePasswordReset,
+  completeMfaSignIn as apiCompleteMfaSignIn,
+  signUpWithPassword as apiSignUpWithPassword,
+  signInWithOtp as apiSignInWithOtp,
+  verifyOtp as apiVerifyOtp,
+  enrollMfaFactor,
+  getMfaFactors,
+  createMfaChallenge,
+  verifyMfaFactor,
+  removeMfaFactor,
+  signOutUser,
+  rpcCall,
+  dbQuery,
+} from './api';
+import {apiFetch, apiGet} from './api';
 
-export const SECRET_PROJECT_ID = 'tdyfwzwtulnufkpfbwui';
+type BackendRow = Record<string, any>;
+type BackendQueryResponse = {
+  data: any;
+  error: {message: string} | null;
+  count: number | null;
+};
+type BackendUser = {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, any>;
+};
+type BackendChannel = {
+  on: (
+    event: string,
+    filter: Record<string, any>,
+    callback: (payload: {new: BackendRow}) => void,
+  ) => BackendChannel;
+  subscribe: () => BackendChannel;
+  unsubscribe: () => void;
+};
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+class QueryBuilder {
+  constructor(
+    private readonly table: string,
+    private readonly payload: any = {},
+  ) {
+    this.payload.operation = this.payload.operation ?? 'select';
+    this.payload.filters = this.payload.filters ?? [];
+    this.payload.select = this.payload.select ?? '*';
+    this.payload.single = this.payload.single ?? false;
+    this.payload.order = this.payload.order ?? null;
+    this.payload.limit = this.payload.limit ?? null;
+  }
+
+  private clone() {
+    return new QueryBuilder(
+      this.table,
+      JSON.parse(JSON.stringify(this.payload)),
+    );
+  }
+
+  private applyFilter(column: string, op: string, value: any) {
+    this.payload.filters = [
+      ...(this.payload.filters ?? []),
+      {column, op, value},
+    ];
+    return this;
+  }
+
+  select(fields = '*', options?: {count?: 'exact'; head?: boolean}) {
+    this.payload.select = fields;
+    this.payload.count = options?.count;
+    this.payload.head = options?.head;
+    return this;
+  }
+
+  eq(column: string, value: any) {
+    return this.applyFilter(column, 'eq', value);
+  }
+
+  neq(column: string, value: any) {
+    return this.applyFilter(column, 'neq', value);
+  }
+
+  gt(column: string, value: any) {
+    return this.applyFilter(column, 'gt', value);
+  }
+
+  lt(column: string, value: any) {
+    return this.applyFilter(column, 'lt', value);
+  }
+
+  gte(column: string, value: any) {
+    return this.applyFilter(column, 'gte', value);
+  }
+
+  lte(column: string, value: any) {
+    return this.applyFilter(column, 'lte', value);
+  }
+
+  contains(column: string, value: any) {
+    return this.applyFilter(column, 'contains', value);
+  }
+
+  or(expression: string) {
+    this.payload.filters = [
+      ...(this.payload.filters ?? []),
+      {column: '__or__', op: 'or', value: expression},
+    ];
+    return this;
+  }
+
+  order(column: string, options?: {ascending?: boolean}) {
+    this.payload.order = {column, ascending: options?.ascending ?? true};
+    return this;
+  }
+
+  limit(value: number) {
+    this.payload.limit = value;
+    return this;
+  }
+
+  maybeSingle() {
+    this.payload.single = true;
+    return this;
+  }
+
+  single() {
+    this.payload.single = true;
+    return this;
+  }
+
+  insert(data: any) {
+    this.payload.operation = 'insert';
+    this.payload.data = data;
+    return this;
+  }
+
+  upsert(data: any) {
+    this.payload.operation = 'upsert';
+    this.payload.data = data;
+    return this;
+  }
+
+  update(data: any) {
+    this.payload.operation = 'update';
+    this.payload.data = data;
+    return this;
+  }
+
+  delete() {
+    this.payload.operation = 'delete';
+    this.payload.data = this.payload.data ?? {};
+    return this;
+  }
+
+  async execute(): Promise<BackendQueryResponse> {
+    const payload = {...this.payload};
+
+    if (
+      (payload.operation === 'update' || payload.operation === 'delete') &&
+      payload.data &&
+      !payload.data.id
+    ) {
+      const idFilter = (payload.filters || []).find(
+        (filter: any) => filter.column === 'id' && filter.op === 'eq',
+      );
+      if (idFilter) {
+        payload.data = {...payload.data, id: idFilter.value};
+      }
+    }
+
+    const response = await dbQuery<BackendQueryResponse>(this.table, payload);
+    return {
+      data: response?.data ?? null,
+      error: response?.error ?? null,
+      count: response?.count ?? null,
+    };
+  }
+
+  then<TResult1 = any, TResult2 = never>(
+    onfulfilled?:
+      | ((value: BackendQueryResponse) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
+  ) {
+    return this.execute().then(onfulfilled, onrejected);
+  }
+}
+
+async function authResult(
+  request: Promise<any>,
+): Promise<{data: any; error: {message: string} | null}> {
+  try {
+    const response = await request;
+    return {data: response?.data ?? null, error: response?.error ?? null};
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Authentication request failed.',
+      },
+    };
+  }
+}
+
+function createAuthApi() {
+  return {
+    async getSession() {
+      const result = await authResult(getCurrentSession());
+      return {
+        data: {session: result.data?.session ?? null},
+        error: result.error,
+      };
+    },
+    async getUser(): Promise<{
+      data: {user: BackendUser | null};
+      error: {message: string} | null;
+    }> {
+      const result = await authResult(getCurrentUser());
+      return {data: {user: result.data?.user ?? null}, error: result.error};
+    },
+    async updateUser(payload: {data?: Record<string, any>; password?: string}) {
+      return authResult(updateAuthUser(payload));
+    },
+    async signInWithPassword({
+      email,
+      password,
+    }: {
+      email: string;
+      password: string;
+    }) {
+      return authResult(apiSignInWithPassword(email, password));
+    },
+    async requestPasswordReset({email}: {email: string}) {
+      return authResult(requestPasswordReset(email));
+    },
+    async completePasswordReset({
+      email,
+      code,
+      password,
+    }: {
+      email: string;
+      code: string;
+      password: string;
+    }) {
+      return authResult(completePasswordReset(email, code, password));
+    },
+    async completeMfaSignIn({
+      challengeId,
+      code,
+    }: {
+      challengeId: string;
+      code: string;
+    }) {
+      return authResult(apiCompleteMfaSignIn(challengeId, code));
+    },
+    async signUp({
+      email,
+      password,
+      options,
+    }: {
+      email: string;
+      password: string;
+      options?: {data?: Record<string, any>};
+    }) {
+      return authResult(apiSignUpWithPassword(email, password, options));
+    },
+    async signInWithOtp({
+      email,
+      options,
+    }: {
+      email: string;
+      options?: {shouldCreateUser?: boolean};
+    }) {
+      return authResult(
+        apiSignInWithOtp(email, options ?? {shouldCreateUser: false}),
+      );
+    },
+    async verifyOtp({
+      email,
+      token,
+      type,
+    }: {
+      email: string;
+      token: string;
+      type: string;
+    }) {
+      return authResult(apiVerifyOtp({email, token, type}));
+    },
+    async signOut() {
+      return authResult(signOutUser());
+    },
+    onAuthStateChange(_callback: (event: string, session: any) => void) {
+      return {
+        data: {
+          subscription: {
+            unsubscribe: () => undefined,
+          },
+        },
+      };
+    },
+    mfa: {
+      async enroll(_params: {
+        factorType: 'totp';
+      }): Promise<{data: any; error: {message: string} | null}> {
+        return authResult(enrollMfaFactor());
+      },
+      async challenge({
+        factorId,
+      }: {
+        factorId: string;
+      }): Promise<{data: any; error: {message: string} | null}> {
+        return authResult(createMfaChallenge(factorId));
+      },
+      async verify({
+        factorId,
+        challengeId,
+        code,
+      }: {
+        factorId: string;
+        challengeId: string;
+        code: string;
+      }): Promise<{data: any; error: {message: string} | null}> {
+        return authResult(verifyMfaFactor(factorId, challengeId, code));
+      },
+      async unenroll({
+        factorId,
+      }: {
+        factorId: string;
+      }): Promise<{data: any; error: {message: string} | null}> {
+        return authResult(removeMfaFactor(factorId));
+      },
+      async listFactors(): Promise<{
+        data: any;
+        error: {message: string} | null;
+      }> {
+        return authResult(getMfaFactors());
+      },
+    },
+  };
+}
+
+export const backend = {
+  auth: createAuthApi(),
+  from: (table: string) => new QueryBuilder(table),
+  channel: (_name?: string): BackendChannel => {
+    const listeners: Array<{
+      event: string;
+      table: string;
+      filter?: string;
+      callback: (payload: {new: BackendRow}) => void;
+      snapshot: Map<string, string> | null;
+    }> = [];
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let polling = false;
+    const poll = async () => {
+      if (polling) {
+        return;
+      }
+      polling = true;
+      try {
+        for (const listener of listeners) {
+          const filters = listener.filter?.match(
+            /^([a-z_][a-z0-9_]*)=eq\.(true|false|[^,]+)$/i,
+          );
+          const response = await dbQuery<BackendQueryResponse>(listener.table, {
+            operation: 'select',
+            select: '*',
+            filters: filters
+              ? [
+                  {
+                    column: filters[1],
+                    op: 'eq',
+                    value:
+                      filters[2] === 'true'
+                        ? true
+                        : filters[2] === 'false'
+                        ? false
+                        : filters[2],
+                  },
+                ]
+              : [],
+            order: {column: 'created_at', ascending: false},
+            limit: 200,
+          });
+          const rows = Array.isArray(response.data)
+            ? response.data
+            : response.data
+            ? [response.data]
+            : [];
+          const nextSnapshot = new Map(
+            rows.map((row: BackendRow) => [
+              String(row.id),
+              JSON.stringify(row),
+            ]),
+          );
+          if (listener.snapshot) {
+            for (const row of rows) {
+              const id = String(row.id);
+              const exists = listener.snapshot.has(id);
+              const changed = listener.snapshot.get(id) !== JSON.stringify(row);
+              const shouldNotify =
+                listener.event === '*' ||
+                (listener.event === 'INSERT' && !exists) ||
+                (listener.event === 'UPDATE' && exists && changed);
+              if (shouldNotify) {
+                listener.callback({new: row});
+              }
+            }
+            if (listener.event === '*' || listener.event === 'DELETE') {
+              for (const [id, oldRow] of listener.snapshot) {
+                if (!nextSnapshot.has(id)) {
+                  listener.callback({new: JSON.parse(oldRow)});
+                }
+              }
+            }
+          }
+          listener.snapshot = nextSnapshot;
+        }
+      } catch (error) {
+        console.error(
+          'Backend polling failed:',
+          error instanceof Error ? error.message : error,
+        );
+      } finally {
+        polling = false;
+      }
+    };
+    const channel: BackendChannel = {
+      on: (event, filter, callback) => {
+        listeners.push({
+          event,
+          table: String(filter.table || ''),
+          filter: typeof filter.filter === 'string' ? filter.filter : undefined,
+          callback,
+          snapshot: null,
+        });
+        return channel;
+      },
+      subscribe: () => {
+        poll();
+        pollTimer = setInterval(() => poll(), 15000);
+        return channel;
+      },
+      unsubscribe: () => {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+        }
+        pollTimer = null;
+      },
+    };
+    return channel;
+  },
+  removeChannel: (channel: BackendChannel) => channel.unsubscribe(),
+  rpc: async (name: string, args: Record<string, any> = {}) => {
+    const response = await rpcCall<{data?: any; error?: any}>(name, args);
+    return {data: response?.data ?? null, error: response?.error ?? null};
+  },
+};
 
 export interface UserPreferences {
   public_visibility: boolean;
@@ -65,7 +523,7 @@ function preferencesFromMetadata(
 export async function fetchUserProfile(): Promise<UserProfile | null> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return null;
   }
@@ -75,7 +533,7 @@ export async function fetchUserProfile(): Promise<UserProfile | null> {
   let preferences = preferencesFromMetadata(metadata);
 
   try {
-    const {data: profile} = await supabase
+    const {data: profile} = await backend
       .from('profiles')
       .select(
         'full_name, avatar_url, department, matric_number, verified, preferences',
@@ -118,7 +576,7 @@ export async function fetchUserProfileById(
   userId: string,
 ): Promise<UserProfile | null> {
   try {
-    const {data, error} = await supabase
+    const {data, error} = await backend
       .from('profiles')
       .select(
         'id, full_name, avatar_url, department, matric_number, verified, preferences',
@@ -147,7 +605,7 @@ export async function fetchUserProfileById(
   }
 
   try {
-    const {data: authUser} = await supabase.auth.getUser();
+    const {data: authUser} = await backend.auth.getUser();
     if (authUser.user && authUser.user.id === userId) {
       const metadata = authUser.user.user_metadata ?? {};
       return {
@@ -173,12 +631,12 @@ export async function savePreferences(
 ): Promise<void> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return;
   }
 
-  await supabase.auth.updateUser({
+  await backend.auth.updateUser({
     data: {
       ...user.user_metadata,
       ...preferences,
@@ -186,7 +644,7 @@ export async function savePreferences(
   });
 
   try {
-    await supabase.from('profiles').upsert({
+    await backend.from('profiles').upsert({
       id: user.id,
       preferences,
       updated_at: new Date().toISOString(),
@@ -204,12 +662,12 @@ export async function updateProfile(fields: {
 }): Promise<{error: string | null}> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     throw new Error('Not authenticated');
   }
 
-  const {error: authError} = await supabase.auth.updateUser({
+  const {error: authError} = await backend.auth.updateUser({
     data: {
       ...user.user_metadata,
       ...fields,
@@ -220,7 +678,7 @@ export async function updateProfile(fields: {
   }
 
   try {
-    const {error: dbError} = await supabase.from('profiles').upsert({
+    const {error: dbError} = await backend.from('profiles').upsert({
       id: user.id,
       ...fields,
       updated_at: new Date().toISOString(),
@@ -240,7 +698,7 @@ export async function signInWithOtp(
   options?: {shouldCreateUser?: boolean},
 ): Promise<{error: string | null}> {
   try {
-    const {error} = await supabase.auth.signInWithOtp({
+    const {error} = await backend.auth.signInWithOtp({
       email,
       options: {
         shouldCreateUser: options?.shouldCreateUser ?? false,
@@ -255,12 +713,12 @@ export async function signInWithOtp(
 export async function changePassword(
   newPassword: string,
 ): Promise<{error: string | null}> {
-  const {error} = await supabase.auth.updateUser({password: newPassword});
+  const {error} = await backend.auth.updateUser({password: newPassword});
   return {error: error ? error.message : null};
 }
 
 export async function signOut(): Promise<void> {
-  await supabase.auth.signOut();
+  await backend.auth.signOut();
 }
 
 // ---------------------------------------------------------------------------
@@ -272,7 +730,7 @@ export async function enableTwoFactor(): Promise<{
   secret?: string;
   factorId?: string;
 }> {
-  const {data, error} = await supabase.auth.mfa.enroll({
+  const {data, error} = await backend.auth.mfa.enroll({
     factorType: 'totp',
   });
   if (error) {
@@ -290,7 +748,7 @@ export async function challengeTwoFactor(factorId: string): Promise<{
   error: string | null;
   challengeId?: string;
 }> {
-  const {data, error} = await supabase.auth.mfa.challenge({factorId});
+  const {data, error} = await backend.auth.mfa.challenge({factorId});
   if (error) {
     return {error: error.message};
   }
@@ -302,7 +760,7 @@ export async function verifyTwoFactor(
   challengeId: string,
   code: string,
 ): Promise<{error: string | null}> {
-  const {error} = await supabase.auth.mfa.verify({
+  const {error} = await backend.auth.mfa.verify({
     factorId,
     challengeId,
     code,
@@ -313,26 +771,22 @@ export async function verifyTwoFactor(
 export async function disableTwoFactor(
   factorId: string,
 ): Promise<{error: string | null}> {
-  const {error} = await supabase.auth.mfa.unenroll({factorId});
+  const {error} = await backend.auth.mfa.unenroll({factorId});
   return {error: error ? error.message : null};
 }
 
 export async function listTwoFactorFactors(): Promise<
   {id: string; friendly_name: string | null; status: string}[]
 > {
-  try {
-    const {data, error} = await supabase.auth.mfa.listFactors();
-    if (error || !data) {
-      return [];
-    }
-    return (data.totp ?? []).map((f: any) => ({
-      id: f.id,
-      friendly_name: f.friendly_name ?? null,
-      status: f.status,
-    }));
-  } catch {
-    return [];
+  const {data, error} = await backend.auth.mfa.listFactors();
+  if (error) {
+    throw new Error(error.message);
   }
+  return (data?.totp ?? []).map((factor: any) => ({
+    id: factor.id,
+    friendly_name: factor.friendly_name ?? null,
+    status: factor.status,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -350,12 +804,12 @@ export interface BlockedUser {
 export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return [];
   }
   try {
-    const {data, error} = await supabase
+    const {data, error} = await backend
       .from('blocked_users')
       .select('id, blocked_id, full_name, handle, avatar_url, created_at')
       .eq('user_id', user.id)
@@ -371,7 +825,7 @@ export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
 
 export async function unblockUser(recordId: string): Promise<void> {
   try {
-    await supabase.from('blocked_users').delete().eq('id', recordId);
+    await backend.from('blocked_users').delete().eq('id', recordId);
   } catch {
     // ignore
   }
@@ -394,12 +848,12 @@ export async function recordLoginEvent(meta?: {
 }): Promise<void> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return;
   }
   try {
-    await supabase.from('login_history').insert({
+    await backend.from('login_history').insert({
       user_id: user.id,
       device: meta?.device ?? null,
       location: meta?.location ?? null,
@@ -413,12 +867,12 @@ export async function recordLoginEvent(meta?: {
 export async function fetchLoginHistory(): Promise<LoginEvent[]> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return [];
   }
   try {
-    const {data, error} = await supabase
+    const {data, error} = await backend
       .from('login_history')
       .select('id, created_at, ip_address, device, location')
       .eq('user_id', user.id)
@@ -446,15 +900,15 @@ export const SUPPORTED_LANGUAGES = [
 export async function saveLanguage(language: string): Promise<void> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return;
   }
-  await supabase.auth.updateUser({
+  await backend.auth.updateUser({
     data: {...user.user_metadata, language},
   });
   try {
-    await supabase
+    await backend
       .from('profiles')
       .upsert({id: user.id, language, updated_at: new Date().toISOString()});
   } catch {
@@ -480,18 +934,20 @@ export interface Post {
   title: string;
   body: string | null;
   image: string | null;
+  video?: string | null;
   tag: string;
   like_count: number;
   comment_count: number;
-  liked?: boolean;
   created_at: string;
   updated_at: string;
+  liked?: boolean;
 }
 
 export interface PostCreate {
   title: string;
   body?: string;
   image?: string;
+  video?: string;
   tag?: string;
   author_id?: string;
   author_name?: string;
@@ -501,7 +957,7 @@ export interface PostCreate {
 }
 
 export async function fetchPosts(tag?: string): Promise<Post[]> {
-  let query = supabase
+  let query = backend
     .from('posts')
     .select('*')
     .order('created_at', {ascending: false});
@@ -517,8 +973,66 @@ export async function fetchPosts(tag?: string): Promise<Post[]> {
   return data as Post[];
 }
 
+export type FeedPage = {
+  posts: Post[];
+  has_more: boolean;
+  next_cursor: string | null;
+};
+
+export async function fetchFeedPage(
+  tag?: string,
+  cursor?: string | null,
+): Promise<FeedPage> {
+  const response = await apiGet<{
+    data: FeedPage;
+    error?: {message?: string} | null;
+  }>('/feed', {tag: tag && tag !== 'ALL' ? tag : undefined, cursor});
+  if (response.error) {
+    throw new Error(
+      response.error.message || 'Unable to load the campus feed.',
+    );
+  }
+  return response.data;
+}
+
+export async function setPostLiked(
+  postId: string,
+  liked: boolean,
+): Promise<{liked: boolean; like_count: number}> {
+  const response = await apiFetch<{
+    data: {liked: boolean; like_count: number};
+    error?: {message?: string} | null;
+  }>(`/posts/${encodeURIComponent(postId)}/like`, {
+    method: 'PUT',
+    body: JSON.stringify({liked}),
+  });
+  if (response.error) {
+    throw new Error(response.error.message || 'Unable to update this like.');
+  }
+  return response.data;
+}
+
+export async function createFeedComment(
+  postId: string,
+  body: string,
+): Promise<Comment> {
+  const response = await apiFetch<{
+    data: Comment;
+    error?: {message?: string} | null;
+  }>(`/posts/${encodeURIComponent(postId)}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({body}),
+  });
+  if (response.error) {
+    throw new Error(
+      response.error.message || 'Unable to publish your comment.',
+    );
+  }
+  return response.data;
+}
+
 export async function fetchPostById(id: string): Promise<Post | null> {
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('posts')
     .select('*')
     .eq('id', id)
@@ -532,7 +1046,7 @@ export async function fetchPostById(id: string): Promise<Post | null> {
 export async function createPost(post: PostCreate): Promise<Post> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     throw new Error('Not authenticated');
   }
@@ -552,12 +1066,13 @@ export async function createPost(post: PostCreate): Promise<Post> {
     title: post.title,
     body: post.body || null,
     image: post.image || null,
+    video: post.video || null,
     tag: (post.tag || 'ANNOUNCEMENTS').toUpperCase(),
     like_count: post.like_count ?? 0,
     comment_count: post.comment_count ?? 0,
   };
 
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('posts')
     .insert(newPost)
     .select()
@@ -573,33 +1088,12 @@ export async function createPost(post: PostCreate): Promise<Post> {
 // Likes / Votes
 // ---------------------------------------------------------------------------
 export async function toggleLike(postId: string): Promise<boolean> {
-  const {
-    data: {user},
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return false;
-  }
-
-  const {data: existing} = await supabase
-    .from('likes')
-    .select('id')
-    .eq('post_id', postId)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  if (existing) {
-    await supabase.from('likes').delete().eq('id', existing.id);
-    await supabase.rpc('decrement_like', {post_id: postId});
-    return false;
-  }
-
-  await supabase.from('likes').insert({post_id: postId, user_id: user.id});
-  await supabase.rpc('increment_like', {post_id: postId});
-  return true;
+  const liked = await hasUserLiked(postId);
+  return (await setPostLiked(postId, !liked)).liked;
 }
 
 export async function getLikeCount(postId: string): Promise<number> {
-  const {count} = await supabase
+  const {count} = await backend
     .from('likes')
     .select('*', {count: 'exact', head: true})
     .eq('post_id', postId);
@@ -609,12 +1103,12 @@ export async function getLikeCount(postId: string): Promise<number> {
 export async function hasUserLiked(postId: string): Promise<boolean> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return false;
   }
 
-  const {data} = await supabase
+  const {data} = await backend
     .from('likes')
     .select('id')
     .eq('post_id', postId)
@@ -626,7 +1120,7 @@ export async function hasUserLiked(postId: string): Promise<boolean> {
 
 export async function deletePost(postId: string): Promise<void> {
   try {
-    await supabase.from('posts').delete().eq('id', postId);
+    await backend.from('posts').delete().eq('id', postId);
   } catch {
     // ignore
   }
@@ -646,7 +1140,7 @@ export interface Comment {
 }
 
 export async function fetchComments(postId: string): Promise<Comment[]> {
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('comments')
     .select('*')
     .eq('post_id', postId)
@@ -661,61 +1155,20 @@ export async function createComment(
   postId: string,
   body: string,
 ): Promise<Comment | null> {
-  const {
-    data: {user},
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return null;
-  }
-
-  const profile = await fetchUserProfile();
-
-  const comment: any = {
-    id:
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    post_id: postId,
-    user_id: user.id,
-    author_name: profile?.full_name || 'Anonymous',
-    avatar: profile?.avatar_url || null,
-    body,
-  };
-
-  const {data, error} = await supabase
-    .from('comments')
-    .insert(comment)
-    .select()
-    .single();
-
-  if (error) {
-    return null;
-  }
-
-  await supabase.rpc('increment_comment', {post_id: postId});
-  return data as Comment;
+  return createFeedComment(postId, body);
 }
 
-export async function deleteComment(commentId: string): Promise<void> {
-  const {
-    data: {user},
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return;
+export async function deleteComment(
+  commentId: string,
+): Promise<{post_id: string; comment_count: number}> {
+  const response = await apiFetch<{
+    data: {post_id: string; comment_count: number};
+    error?: {message?: string} | null;
+  }>(`/comments/${encodeURIComponent(commentId)}`, {method: 'DELETE'});
+  if (response.error) {
+    throw new Error(response.error.message || 'Unable to remove this comment.');
   }
-
-  const {data: comment} = await supabase
-    .from('comments')
-    .select('post_id')
-    .eq('id', commentId)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  await supabase.from('comments').delete().eq('id', commentId);
-
-  if (comment?.post_id) {
-    await supabase.rpc('decrement_comment', {post_id: comment.post_id});
-  }
+  return response.data;
 }
 
 // ---------------------------------------------------------------------------
@@ -724,12 +1177,12 @@ export async function deleteComment(commentId: string): Promise<void> {
 export async function followUser(followingId: string): Promise<void> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return;
   }
 
-  await supabase
+  await backend
     .from('follows')
     .upsert({follower_id: user.id, following_id: followingId});
 }
@@ -737,12 +1190,12 @@ export async function followUser(followingId: string): Promise<void> {
 export async function unfollowUser(followingId: string): Promise<void> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return;
   }
 
-  await supabase
+  await backend
     .from('follows')
     .delete()
     .eq('follower_id', user.id)
@@ -752,12 +1205,12 @@ export async function unfollowUser(followingId: string): Promise<void> {
 export async function isFollowing(followingId: string): Promise<boolean> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return false;
   }
 
-  const {data} = await supabase
+  const {data} = await backend
     .from('follows')
     .select('id')
     .eq('follower_id', user.id)
@@ -768,7 +1221,7 @@ export async function isFollowing(followingId: string): Promise<boolean> {
 }
 
 export async function getFollowerCount(userId: string): Promise<number> {
-  const {count} = await supabase
+  const {count} = await backend
     .from('follows')
     .select('*', {count: 'exact', head: true})
     .eq('following_id', userId);
@@ -776,7 +1229,7 @@ export async function getFollowerCount(userId: string): Promise<number> {
 }
 
 export async function getFollowingCount(userId: string): Promise<number> {
-  const {count} = await supabase
+  const {count} = await backend
     .from('follows')
     .select('*', {count: 'exact', head: true})
     .eq('follower_id', userId);
@@ -788,7 +1241,7 @@ export async function getFollowers(
 ): Promise<
   {id: string; full_name: string | null; avatar_url: string | null}[]
 > {
-  const {data} = await supabase
+  const {data} = await backend
     .from('follows')
     .select(
       'follower_id, follower:profiles!follower_id(id, full_name, avatar_url)',
@@ -811,7 +1264,7 @@ export async function getFollowing(
 ): Promise<
   {id: string; full_name: string | null; avatar_url: string | null}[]
 > {
-  const {data} = await supabase
+  const {data} = await backend
     .from('follows')
     .select(
       'following_id, following:profiles!following_id(id, full_name, avatar_url)',
@@ -846,12 +1299,12 @@ export interface Alert {
 export async function fetchAlerts(): Promise<Alert[]> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return [];
   }
 
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('alerts')
     .select('*')
     .or(`user_id.eq.'${user.id}',is_broadcast.eq.true`)
@@ -872,12 +1325,12 @@ export async function createAlert(alert: {
 }): Promise<void> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return;
   }
 
-  await supabase.from('alerts').insert({
+  await backend.from('alerts').insert({
     id:
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
@@ -892,18 +1345,18 @@ export async function createAlert(alert: {
 }
 
 export async function markAlertRead(id: string): Promise<void> {
-  await supabase.from('alerts').update({unread: false}).eq('id', id);
+  await backend.from('alerts').update({unread: false}).eq('id', id);
 }
 
 export async function markAllAlertsRead(): Promise<void> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return;
   }
 
-  await supabase
+  await backend
     .from('alerts')
     .update({unread: false})
     .or(`user_id.eq.'${user.id}',is_broadcast.eq.true`);
@@ -934,6 +1387,7 @@ export interface Candidate {
   election_id: string;
   name: string;
   position: string;
+  position_id: string | null;
   department: string | null;
   manifesto: string | null;
   avatar_url: string | null;
@@ -941,7 +1395,7 @@ export interface Candidate {
 }
 
 export async function fetchElections(): Promise<Election[]> {
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('elections')
     .select('*')
     .eq('status', 'active')
@@ -954,7 +1408,7 @@ export async function fetchElections(): Promise<Election[]> {
 }
 
 export async function fetchPositions(electionId: string): Promise<Position[]> {
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('positions')
     .select('*')
     .eq('election_id', electionId)
@@ -969,7 +1423,7 @@ export async function fetchPositions(electionId: string): Promise<Position[]> {
 export async function fetchCandidates(
   electionId: string,
 ): Promise<Candidate[]> {
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('election_candidates')
     .select('*')
     .eq('election_id', electionId)
@@ -984,6 +1438,7 @@ export async function fetchCandidates(
     election_id: row.election_id,
     name: row.name,
     position: row.position,
+    position_id: row.position_id ?? null,
     department: row.department ?? null,
     manifesto: row.manifesto ?? null,
     avatar_url: row.avatar_url ?? null,
@@ -998,13 +1453,13 @@ export async function castVote(
 ): Promise<{receiptId: string | null; isDuplicate: boolean}> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     throw new Error('You must be signed in to vote.');
   }
 
   try {
-    const {data, error} = await supabase.rpc('cast_vote', {
+    const {data, error} = await backend.rpc('cast_vote', {
       p_election_id: electionId,
       p_position_id: positionId,
       p_candidate_id: candidateId,
@@ -1030,7 +1485,7 @@ export async function castVote(
       throw new Error(message || 'Failed to cast vote.');
     }
 
-    const {data: existing} = await supabase
+    const {data: existing} = await backend
       .from('election_votes')
       .select('receipt_hash')
       .eq('election_id', electionId)
@@ -1052,7 +1507,7 @@ export async function castVote(
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
 
-    const {error: insertError} = await supabase.from('election_votes').insert({
+    const {error: insertError} = await backend.from('election_votes').insert({
       election_id: electionId,
       voter_id: user.id,
       candidate_id: candidateId,
@@ -1065,12 +1520,12 @@ export async function castVote(
     }
 
     const [{data: cand}, {data: election}] = await Promise.all([
-      supabase
+      backend
         .from('election_candidates')
         .select('vote_count')
         .eq('id', candidateId)
         .single(),
-      supabase
+      backend
         .from('elections')
         .select('total_votes')
         .eq('id', electionId)
@@ -1078,11 +1533,11 @@ export async function castVote(
     ]);
 
     await Promise.all([
-      supabase
+      backend
         .from('election_candidates')
         .update({vote_count: (cand?.vote_count || 0) + 1})
         .eq('id', candidateId),
-      supabase
+      backend
         .from('elections')
         .update({total_votes: (election?.total_votes || 0) + 1})
         .eq('id', electionId),
@@ -1097,7 +1552,7 @@ export async function fetchElectionResults(
 ): Promise<
   {candidateId: string; name: string; photo_url: string | null; votes: number}[]
 > {
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('election_candidates')
     .select('id, name, avatar_url, vote_count')
     .eq('election_id', electionId)
@@ -1127,7 +1582,7 @@ export interface BallotReceipt {
 export async function fetchBallotReceipts(
   electionId: string,
 ): Promise<BallotReceipt[]> {
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('election_votes')
     .select(
       'id, election_id, position_id, candidate_id, receipt_hash, created_at, candidate:election_candidates(name)',
@@ -1155,12 +1610,12 @@ export async function fetchUserVotedPositions(
 ): Promise<string[]> {
   const {
     data: {user},
-  } = await supabase.auth.getUser();
+  } = await backend.auth.getUser();
   if (!user) {
     return [];
   }
 
-  const {data, error} = await supabase
+  const {data, error} = await backend
     .from('election_votes')
     .select('position_id')
     .eq('election_id', electionId)
@@ -1173,7 +1628,7 @@ export async function fetchUserVotedPositions(
 }
 
 export async function getTotalVotes(electionId: string): Promise<number> {
-  const {count, error} = await supabase
+  const {count, error} = await backend
     .from('election_votes')
     .select('*', {count: 'exact', head: true})
     .eq('election_id', electionId);

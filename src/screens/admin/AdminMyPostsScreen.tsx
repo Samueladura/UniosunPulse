@@ -15,13 +15,15 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors, spacing, radius, typography} from '../../theme/colors';
-import {supabase, type Post} from '../../services/supabase';
+import {backend, type Post} from '../../services/backend';
+import PostMedia from '../../components/PostMedia';
 
 interface AdminPostRow {
   id: string;
   title: string;
   body: string | null;
   image: string | null;
+  video?: string | null;
   tag: string;
   like_count: number;
   comment_count: number;
@@ -52,7 +54,7 @@ export default function AdminMyPostsScreen({navigation}: any) {
 
   const loadPosts = useCallback(async () => {
     try {
-      const {data, error} = await supabase
+      const {data, error} = await backend
         .from('posts')
         .select('*')
         .eq('author_id', 'admin_official')
@@ -71,7 +73,7 @@ export default function AdminMyPostsScreen({navigation}: any) {
 
   useEffect(() => {
     loadPosts();
-    const channel = supabase
+    const channel = backend
       .channel('admin:my_posts')
       .on(
         'postgres_changes',
@@ -85,7 +87,7 @@ export default function AdminMyPostsScreen({navigation}: any) {
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, [loadPosts]);
 
@@ -101,7 +103,7 @@ export default function AdminMyPostsScreen({navigation}: any) {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await supabase.from('posts').delete().eq('id', post.id);
+          await backend.from('posts').delete().eq('id', post.id);
           setPosts(prev => prev.filter(p => p.id !== post.id));
         },
       },
@@ -124,7 +126,7 @@ export default function AdminMyPostsScreen({navigation}: any) {
       return;
     }
     setSaving(true);
-    const {error} = await supabase
+    const {error} = await backend
       .from('posts')
       .update({
         title: editTitle.trim(),
@@ -238,9 +240,7 @@ export default function AdminMyPostsScreen({navigation}: any) {
                   {post.body}
                 </Text>
               ) : null}
-              {post.image && (
-                <Image source={{uri: post.image}} style={styles.postImage} />
-              )}
+              <PostMedia image={post.image} video={post.video} />
 
               <View style={styles.cardFooter}>
                 <View style={styles.statRow}>
@@ -440,12 +440,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
-  },
-  postImage: {
-    width: '100%',
-    height: 160,
-    borderRadius: radius.md,
-    marginTop: 6,
   },
   cardFooter: {
     borderTopWidth: 1,

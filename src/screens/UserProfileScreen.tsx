@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
+import PostMedia from '../components/PostMedia';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {
   fetchUserProfile,
@@ -22,8 +23,8 @@ import {
   unfollowUser,
   UserProfile,
   deletePost,
-} from '../services/supabase';
-import {supabase} from '../services/supabase';
+} from '../services/backend';
+import {backend} from '../services/backend';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
 
@@ -62,6 +63,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
       title: string;
       body: string;
       image: string | null;
+      video: string | null;
       likes: string;
       comments: number;
     }[]
@@ -106,6 +108,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
                   title: p.title,
                   body: p.body || '',
                   image: p.image,
+                  video: p.video || null,
                   likes: formatCount(p.like_count),
                   comments: p.comment_count,
                 })),
@@ -115,7 +118,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
       }
       const {
         data: {user},
-      } = await supabase.auth.getUser();
+      } = await backend.auth.getUser();
       if (active && user) {
         setCurrentUserId(user.id);
       }
@@ -336,12 +339,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
                 <Text style={styles.postCardBody} numberOfLines={2}>
                   {post.body}
                 </Text>
-                {post.image && (
-                  <Image
-                    source={{uri: post.image}}
-                    style={styles.postCardImage}
-                  />
-                )}
+                <PostMedia image={post.image} video={post.video} />
                 <View style={styles.postCardFooter}>
                   <View style={styles.postCardFooterLeft}>
                     <Icon name="heart" size={16} color={colors.textSecondary} />
@@ -518,12 +516,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.sm,
     lineHeight: 20,
-  },
-  postCardImage: {
-    width: '100%',
-    height: 160,
-    borderRadius: radius.md,
-    marginBottom: spacing.sm,
   },
   postCardFooter: {
     flexDirection: 'row',

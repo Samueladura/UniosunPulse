@@ -20,9 +20,9 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import Slider from '@react-native-community/slider';
 import {colors} from '../theme/colors.ts';
 import {
-  supabase,
+  backend,
   fetchUserProfile,
-  signOut as supabaseSignOut,
+  signOut as backendSignOut,
   changePassword,
   updateProfile,
   enableTwoFactor,
@@ -37,7 +37,7 @@ import {
   SUPPORTED_LANGUAGES,
   UserProfile,
   UserPreferences,
-} from '../services/supabase';
+} from '../services/backend';
 import {launchImageLibrary} from 'react-native-image-picker';
 import {usePrefs, useThemedStyles} from '../theme/PreferencesContext';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -231,15 +231,23 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
     if (data) {
       setProfile(data);
     }
-    const factors = await listTwoFactorFactors();
-    setTwoFactorOn(factors.some(f => f.status === 'verified'));
-    setLoading(false);
+    try {
+      const factors = await listTwoFactorFactors();
+      setTwoFactorOn(factors.some(f => f.status === 'verified'));
+    } catch (error) {
+      Alert.alert(
+        'Two-Factor Status Unavailable',
+        error instanceof Error ? error.message : 'Could not load security settings.',
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     loadProfile();
 
-    const {data: authListener} = supabase.auth.onAuthStateChange(() => {
+    const {data: authListener} = backend.auth.onAuthStateChange(() => {
       loadProfile();
     });
     return () => {
@@ -263,7 +271,7 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
 
   useEffect(() => {
     (async () => {
-      const user = await supabase.auth.getUser().then(r => r.data.user);
+      const user = await backend.auth.getUser().then(r => r.data.user);
       if (user?.id) {
         const count = await getFollowerCount(user.id);
         setFollowers(count);
@@ -278,7 +286,7 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
         text: 'Sign Out',
         style: 'destructive',
         onPress: async () => {
-          await supabaseSignOut();
+          await backendSignOut();
           navigation.replace('SignIn');
         },
       },
@@ -371,17 +379,24 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
       setTwoFactorCode('');
       setShowTwoFactorModal(true);
     } else {
-      const factors = await listTwoFactorFactors();
-      const active = factors.find(f => f.status === 'verified');
-      if (active) {
-        const {error} = await disableTwoFactor(active.id);
-        if (error) {
-          Alert.alert('Error', error);
-          return;
+      try {
+        const factors = await listTwoFactorFactors();
+        const active = factors.find(f => f.status === 'verified');
+        if (active) {
+          const {error} = await disableTwoFactor(active.id);
+          if (error) {
+            Alert.alert('Error', error);
+            return;
+          }
         }
+        setTwoFactorOn(false);
+        Alert.alert('Disabled', 'Two-factor authentication has been turned off.');
+      } catch (error) {
+        Alert.alert(
+          'Error',
+          error instanceof Error ? error.message : 'Could not disable two-factor authentication.',
+        );
       }
-      setTwoFactorOn(false);
-      Alert.alert('Disabled', 'Two-factor authentication has been turned off.');
     }
   };
 
@@ -394,7 +409,7 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
       return;
     }
     setTwoFactorBusy(true);
-    const challenge = await supabase.auth.mfa.challenge({
+    const challenge = await backend.auth.mfa.challenge({
       factorId: twoFactorFactorId,
     });
     if (challenge.error || !challenge.data) {
@@ -405,7 +420,7 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
       );
       return;
     }
-    const {error} = await supabase.auth.mfa.verify({
+    const {error} = await backend.auth.mfa.verify({
       factorId: twoFactorFactorId,
       challengeId: challenge.data.id,
       code: twoFactorCode,

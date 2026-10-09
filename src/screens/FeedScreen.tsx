@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useMemo, useCallback} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {useFocusEffect} from '@react-navigation/native';
 import {Alert, Modal, TextInput} from 'react-native';
 import {
@@ -6,22 +6,27 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
+  RefreshControl,
   Image,
   TouchableOpacity,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
+import PostMedia from '../components/PostMedia';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
 import {usePosts, PostWithMeta} from '../context/PostsContext';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {
-  supabase,
+  backend,
   fetchComments,
-  createComment,
-  deleteComment as apiDeleteComment,
-} from '../services/supabase';
+} from '../services/backend';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
-import type {MainTabParamList} from '../navigation/AppNavigator';
+import type {
+  MainTabParamList,
+  RootStackParamList,
+} from '../navigation/AppNavigator';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'Feed'>;
 
@@ -60,18 +65,31 @@ interface LocalComment {
 
 export default function FeedScreen({navigation}: Props) {
   const styles = useThemedStyles(getStyles);
-  const {posts, toggleLike, addComment, refreshFeed} = usePosts();
+  const {
+    posts,
+    loading,
+    loadingMore,
+    feedError,
+    toggleLike,
+    addComment,
+    removeComment,
+    refreshFeed,
+    loadMorePosts,
+  } = usePosts();
+  const rootNav =
+    navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
   const [activeFilter, setActiveFilter] = useState('All');
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState<Record<string, LocalComment[]>>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const filterTag = FILTER_TAG_MAP[activeFilter] ?? 'ALL';
 
   useEffect(() => {
     (async () => {
       const {
         data: {user},
-      } = await supabase.auth.getUser();
+      } = await backend.auth.getUser();
       if (user) {
         setCurrentUserId(user.id);
       }
@@ -80,8 +98,8 @@ export default function FeedScreen({navigation}: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      refreshFeed();
-    }, [refreshFeed]),
+      void refreshFeed(filterTag);
+    }, [filterTag, refreshFeed]),
   );
 
   const loadComments = useCallback(async (postId: string) => {
@@ -112,11 +130,25 @@ export default function FeedScreen({navigation}: Props) {
     if (!text || !commentPostId) {
       return;
     }
-    const saved = await createComment(commentPostId, text);
-    if (saved) {
-      await addComment(commentPostId, text);
-      await loadComments(commentPostId);
+    try {
+      const saved = await addComment(commentPostId, text);
+      const localComment: LocalComment = {
+        id: saved.id,
+        user_id: saved.user_id,
+        name: saved.author_name || 'You',
+        body: saved.body,
+        time: new Date(saved.created_at).toLocaleString(),
+      };
+      setComments(current => ({
+        ...current,
+        [commentPostId]: [...(current[commentPostId] ?? []), localComment],
+      }));
       setCommentText('');
+    } catch (error) {
+      Alert.alert(
+        'Comment could not be sent',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
     }
   };
 
@@ -126,15 +158,6 @@ export default function FeedScreen({navigation}: Props) {
 
   const activePost = posts.find(post => post.id === commentPostId) ?? null;
   const postComments = commentPostId ? comments[commentPostId] ?? [] : [];
-
-  const filterTag = FILTER_TAG_MAP[activeFilter] ?? 'ALL';
-  const filteredPosts = useMemo(
-    () =>
-      filterTag === 'ALL'
-        ? posts
-        : posts.filter(post => post.tag === filterTag),
-    [posts, filterTag],
-  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -149,8 +172,39 @@ export default function FeedScreen({navigation}: Props) {
           </View>
           <Text style={styles.topBarTitle}>UniOsun Pulse</Text>
         </View>
-        <Icon name="search" size={22} color={colors.primary} />
+        <View style={styles.topBarActions}>
+          <TouchableOpacity onPress={() => rootNav?.navigate('Search')}>
+            <Icon name="search" size={22} color={colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => rootNav?.navigate('Saved')}>
+            <Icon name="bookmark" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.quickLinks}>
+        {[
+          {label: 'Events', icon: 'calendar', route: 'Events' as const},
+          {
+            label: 'Marketplace',
+            icon: 'shopping-bag',
+            route: 'Marketplace' as const,
+          },
+          {label: 'Career', icon: 'briefcase', route: 'CareerBoard' as const},
+          {label: 'Clubs', icon: 'users', route: 'Clubs' as const},
+        ].map(link => (
+          <TouchableOpacity
+            key={link.route}
+            style={styles.quickLink}
+            onPress={() => rootNav?.navigate(link.route)}>
+            <Icon name={link.icon} size={14} color={colors.primary} />
+            <Text style={styles.quickLinkText}>{link.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       <View style={styles.filterWrapper}>
         <FlatList
@@ -180,9 +234,36 @@ export default function FeedScreen({navigation}: Props) {
       </View>
 
       <FlatList
-        data={filteredPosts}
+        data={posts}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={() => void refreshFeed(filterTag)}
+          />
+        }
+        onEndReached={() => void loadMorePosts()}
+        onEndReachedThreshold={0.45}
+        ListHeaderComponent={
+          feedError ? <Text style={styles.feedError}>{feedError}</Text> : null
+        }
+        ListEmptyComponent={
+          loading ? (
+            <Text style={styles.feedEmpty}>Loading posts…</Text>
+          ) : (
+            <Text style={styles.feedEmpty}>
+              {feedError
+                ? 'Pull down to retry.'
+                : 'No posts in this category yet.'}
+            </Text>
+          )
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <Text style={styles.feedEmpty}>Loading more posts…</Text>
+          ) : null
+        }
         renderItem={({item}) => (
           <TouchableOpacity
             style={styles.card}
@@ -244,15 +325,22 @@ export default function FeedScreen({navigation}: Props) {
             <Text style={styles.postTitle}>{item.title}</Text>
             <Text style={styles.postBody}>{item.body}</Text>
 
-            {item.image ? (
-              <Image source={{uri: item.image}} style={styles.postImage} />
-            ) : null}
+            <PostMedia image={item.image} video={item.video} />
 
             <View style={styles.cardFooter}>
               <View style={styles.footerLeft}>
                 <TouchableOpacity
                   style={styles.footerAction}
-                  onPress={() => toggleLike(item.id)}
+                  onPress={() =>
+                    void toggleLike(item.id).catch(error =>
+                      Alert.alert(
+                        'Like could not be updated',
+                        error instanceof Error
+                          ? error.message
+                          : 'Please try again.',
+                      ),
+                    )
+                  }
                   activeOpacity={0.7}>
                   <Icon
                     name="heart"
@@ -331,8 +419,21 @@ export default function FeedScreen({navigation}: Props) {
                                     text: 'Delete',
                                     style: 'destructive',
                                     onPress: async () => {
-                                      await apiDeleteComment(comment.id);
-                                      await loadComments(commentPostId!);
+                                      const postId = commentPostId;
+                                      if (!postId) {
+                                        return;
+                                      }
+                                      try {
+                                        await removeComment(comment.id);
+                                        await loadComments(postId);
+                                      } catch (error) {
+                                        Alert.alert(
+                                          'Comment could not be deleted',
+                                          error instanceof Error
+                                            ? error.message
+                                            : 'Please try again.',
+                                        );
+                                      }
                                     },
                                   },
                                 ],
@@ -415,6 +516,33 @@ const getStyles = () =>
       height: 24,
     },
     topBarTitle: {fontSize: 17, fontWeight: '800', color: colors.textPrimary},
+    topBarActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    quickLinks: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      gap: spacing.sm,
+      backgroundColor: colors.card,
+    },
+    quickLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.pill,
+      backgroundColor: colors.background,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    quickLinkText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
     filterWrapper: {
       backgroundColor: colors.card,
       paddingVertical: spacing.xs,
@@ -445,6 +573,17 @@ const getStyles = () =>
     },
     filterChipTextActive: {color: colors.white},
     listContent: {padding: spacing.md, paddingBottom: 160},
+    feedError: {
+      color: colors.danger,
+      fontSize: 13,
+      marginBottom: spacing.md,
+    },
+    feedEmpty: {
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: spacing.lg,
+      marginBottom: spacing.lg,
+    },
     card: {
       backgroundColor: colors.card,
       borderRadius: radius.lg,
@@ -483,12 +622,6 @@ const getStyles = () =>
       color: colors.textSecondary,
       marginBottom: spacing.sm,
       lineHeight: 20,
-    },
-    postImage: {
-      width: '100%',
-      height: 180,
-      borderRadius: radius.md,
-      marginBottom: spacing.sm,
     },
     cardFooter: {
       flexDirection: 'row',

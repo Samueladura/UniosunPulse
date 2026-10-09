@@ -1,4 +1,6 @@
-import {supabase, fetchUserProfile} from './supabase';
+import {backend, fetchUserProfile} from './backend';
+
+type DataRow = Record<string, any>;
 
 export interface VerificationRequest {
   id: string;
@@ -68,21 +70,21 @@ export const adminService = {
   // 1. Overview Metrics
   async getDashboardMetrics(): Promise<AdminMetrics> {
     try {
-      const {data: verifications} = await supabase
+      const {data: verifications} = await backend
         .from('student_verifications')
         .select('id, status');
 
-      const {data: reports} = await supabase
+      const {data: reports} = await backend
         .from('reported_posts')
         .select('id, status');
 
-      const {data: elections} = await supabase
+      const {data: elections} = await backend
         .from('elections')
         .select('id, status');
 
       let totalStudents = 0;
       try {
-        const {count} = await supabase
+        const {count} = await backend
           .from('profiles')
           .select('*', {count: 'exact', head: true});
         if (count && count > 0) {
@@ -124,7 +126,7 @@ export const adminService = {
 
   async getAuditLogs(): Promise<AuditLog[]> {
     try {
-      const {data, error} = await supabase
+      const {data, error} = await backend
         .from('admin_audit_logs')
         .select('*')
         .order('created_at', {ascending: false})
@@ -134,7 +136,7 @@ export const adminService = {
         return [];
       }
 
-      return data.map(item => ({
+      return data.map((item: DataRow) => ({
         id: item.id,
         action: item.action,
         adminName: item.admin_name,
@@ -149,7 +151,7 @@ export const adminService = {
   // 2. Student Verifications
   async getVerifications(): Promise<VerificationRequest[]> {
     try {
-      const {data, error} = await supabase
+      const {data, error} = await backend
         .from('student_verifications')
         .select('*')
         .order('created_at', {ascending: false});
@@ -158,7 +160,7 @@ export const adminService = {
         return [];
       }
 
-      return data.map(item => ({
+      return data.map((item: DataRow) => ({
         id: item.id,
         userId: item.user_id,
         fullName: item.full_name,
@@ -178,7 +180,7 @@ export const adminService = {
     reason?: string,
   ): Promise<boolean> {
     try {
-      await supabase
+      await backend
         .from('student_verifications')
         .update({
           status,
@@ -195,7 +197,7 @@ export const adminService = {
   // 3. Content Moderation
   async getReportedPosts(): Promise<ReportedPost[]> {
     try {
-      const {data, error} = await supabase
+      const {data, error} = await backend
         .from('reported_posts')
         .select('*')
         .order('created_at', {ascending: false});
@@ -204,7 +206,7 @@ export const adminService = {
         return [];
       }
 
-      return data.map(item => ({
+      return data.map((item: DataRow) => ({
         id: item.id,
         postId: item.post_id,
         reporterId: item.reporter_id,
@@ -224,7 +226,7 @@ export const adminService = {
     action: 'actioned' | 'dismissed',
   ): Promise<boolean> {
     try {
-      await supabase
+      await backend
         .from('reported_posts')
         .update({
           status: action,
@@ -244,7 +246,7 @@ export const adminService = {
     body: string,
   ): Promise<boolean> {
     try {
-      const {error: alertError} = await supabase.from('alerts').insert([
+      const {error: alertError} = await backend.from('alerts').insert([
         {
           user_id: 'ALL_STUDENTS',
           category,
@@ -266,11 +268,11 @@ export const adminService = {
       const tag = category === 'EMERGENCY' ? 'EMERGENCY' : 'BROADCAST';
       const {
         data: {user},
-      } = await supabase.auth.getUser();
+      } = await backend.auth.getUser();
       const adminProfile = user ? await fetchUserProfile() : null;
       const adminAvatar = adminProfile?.avatar_url || null;
       const adminName = 'Campus Admin (Official)';
-      const {error: postError} = await supabase.from('posts').insert([
+      const {error: postError} = await backend.from('posts').insert([
         {
           author_id: 'admin_official',
           author_name: adminName,
@@ -300,7 +302,7 @@ export const adminService = {
   // 5. Elections Management
   async getAdminElections(): Promise<AdminElection[]> {
     try {
-      const {data, error} = await supabase
+      const {data, error} = await backend
         .from('elections')
         .select('*')
         .order('created_at', {ascending: false});
@@ -314,7 +316,7 @@ export const adminService = {
         let candidatesCount = 0;
         let totalVotes = 0;
         try {
-          const {count} = await supabase
+          const {count} = await backend
             .from('election_candidates')
             .select('*', {count: 'exact', head: true})
             .eq('election_id', item.id);
@@ -324,7 +326,7 @@ export const adminService = {
         }
 
         try {
-          const {data: cands} = await supabase
+          const {data: cands} = await backend
             .from('election_candidates')
             .select('vote_count')
             .eq('election_id', item.id);
@@ -365,57 +367,39 @@ export const adminService = {
     endTime?: string,
     maxCandidates?: number,
   ): Promise<AdminElection> {
-    try {
-      const {data, error} = await supabase
-        .from('elections')
-        .insert([
-          {
-            title,
-            category,
-            description,
-            status: 'active',
-            start_time: startTime || null,
-            end_time: endTime || null,
-            start_at: startTime || null,
-            end_at: endTime || null,
-            max_candidates: maxCandidates || null,
-          },
-        ])
-        .select()
-        .single();
+    const {data, error} = await backend
+      .from('elections')
+      .insert([
+        {
+          title,
+          category,
+          description,
+          status: 'active',
+          start_time: startTime || null,
+          end_time: endTime || null,
+          start_at: startTime || null,
+          end_at: endTime || null,
+          max_candidates: maxCandidates || null,
+        },
+      ])
+      .select()
+      .single();
 
-      if (error || !data) {
-        throw new Error(error?.message || 'Failed to create election');
-      }
-
-      return {
-        id: data.id,
-        title: data.title,
-        category: data.category,
-        description: data.description,
-        status: data.status,
-        startTime: data.start_time,
-        endTime: data.end_time,
-        totalVotes: data.total_votes || 0,
-        candidatesCount: 0,
-        createdAt: data.created_at,
-      };
-    } catch {
-      const newElection: AdminElection = {
-        id: 'e_' + Date.now(),
-        title,
-        category,
-        description,
-        status: 'active',
-        totalVotes: 0,
-        candidatesCount: 0,
-        createdAt: new Date().toISOString(),
-        startTime,
-        endTime,
-        maxCandidates,
-      };
-      return newElection;
+    if (error || !data) {
+      throw new Error(error?.message || 'Failed to create election.');
     }
+    return {
+      id: data.id,
+      title: data.title,
+      category: data.category,
+      description: data.description,
+      status: data.status,
+      startTime: data.start_time,
+      endTime: data.end_time,
+      totalVotes: data.total_votes || 0,
+      candidatesCount: 0,
+      createdAt: data.created_at,
+    };
   },
 
   async updateElectionStatus(
@@ -423,7 +407,7 @@ export const adminService = {
     status: 'draft' | 'active' | 'ended',
   ): Promise<boolean> {
     try {
-      await supabase.from('elections').update({status}).eq('id', id);
+      await backend.from('elections').update({status}).eq('id', id);
       return true;
     } catch {
       return false;
@@ -432,7 +416,7 @@ export const adminService = {
 
   async getCandidates(electionId: string): Promise<ElectionCandidate[]> {
     try {
-      const {data, error} = await supabase
+      const {data, error} = await backend
         .from('election_candidates')
         .select('*')
         .eq('election_id', electionId)
@@ -442,7 +426,7 @@ export const adminService = {
         return [];
       }
 
-      return data.map(item => ({
+      return data.map((item: DataRow) => ({
         id: item.id,
         electionId: item.election_id,
         name: item.name,
@@ -463,18 +447,9 @@ export const adminService = {
     manifesto?: string,
     avatarUrl?: string,
   ): Promise<ElectionCandidate> {
-    const newCandidate: ElectionCandidate = {
-      id: 'c_' + Date.now(),
-      electionId,
-      name,
-      position,
-      manifesto,
-      avatarUrl,
-      voteCount: 0,
-    };
-
-    try {
-      await supabase.from('election_candidates').insert([
+    const {data, error} = await backend
+      .from('election_candidates')
+      .insert([
         {
           election_id: electionId,
           name,
@@ -482,17 +457,27 @@ export const adminService = {
           manifesto,
           avatar_url: avatarUrl,
         },
-      ]);
-    } catch {
-      // Fallback
+      ])
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(error?.message || 'Failed to add the election candidate.');
     }
 
-    return newCandidate;
+    return {
+      id: data.id,
+      electionId: data.election_id,
+      name: data.name,
+      position: data.position,
+      manifesto: data.manifesto ?? undefined,
+      avatarUrl: data.avatar_url ?? undefined,
+      voteCount: data.vote_count ?? 0,
+    };
   },
 
   async deleteCandidate(id: string): Promise<boolean> {
     try {
-      await supabase.from('election_candidates').delete().eq('id', id);
+      await backend.from('election_candidates').delete().eq('id', id);
       return true;
     } catch {
       return false;
@@ -501,8 +486,8 @@ export const adminService = {
 
   async deleteElection(id: string): Promise<boolean> {
     try {
-      await supabase.from('election_candidates').delete().eq('election_id', id);
-      await supabase.from('elections').delete().eq('id', id);
+      await backend.from('election_candidates').delete().eq('election_id', id);
+      await backend.from('elections').delete().eq('id', id);
       return true;
     } catch {
       return false;
@@ -511,7 +496,7 @@ export const adminService = {
 
   async getElectionResults(electionId: string) {
     try {
-      const {data, error} = await supabase
+      const {data, error} = await backend
         .from('election_candidates')
         .select('id, name, avatar_url, vote_count')
         .eq('election_id', electionId)
@@ -521,7 +506,7 @@ export const adminService = {
         return [];
       }
 
-      return data.map(item => ({
+      return data.map((item: DataRow) => ({
         id: item.id,
         candidateId: item.id,
         name: item.name,

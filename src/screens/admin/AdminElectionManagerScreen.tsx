@@ -19,7 +19,7 @@ import {
   AdminElection,
   ElectionCandidate,
 } from '../../services/adminService';
-import {supabase} from '../../services/supabase';
+import {backend} from '../../services/backend';
 
 const isElectionEnded = (election: AdminElection) => {
   if (!election.endTime) {
@@ -65,7 +65,7 @@ export default function AdminElectionManagerScreen({navigation}: any) {
 
   useEffect(() => {
     loadElections();
-    const channel = supabase
+    const channel = backend
       .channel('admin:elections')
       .on(
         'postgres_changes',
@@ -105,7 +105,7 @@ export default function AdminElectionManagerScreen({navigation}: any) {
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, [selectedElection]);
 
@@ -200,23 +200,31 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     }
 
     setAddingCandidate(true);
-    await adminService.addCandidate(
-      selectedElection.id,
-      candidateName.trim(),
-      candidatePosition.trim(),
-      candidateManifesto.trim() || undefined,
-      candidateAvatar.trim() || undefined,
-    );
-    setAddingCandidate(false);
-    setCandidateName('');
-    setCandidatePosition('');
-    setCandidateManifesto('');
-    setCandidateAvatar('');
-    await loadCandidates(selectedElection.id);
-    Alert.alert(
-      'Candidate Added',
-      'Candidate has been added to this election.',
-    );
+    try {
+      await adminService.addCandidate(
+        selectedElection.id,
+        candidateName.trim(),
+        candidatePosition.trim(),
+        candidateManifesto.trim() || undefined,
+        candidateAvatar.trim() || undefined,
+      );
+      setCandidateName('');
+      setCandidatePosition('');
+      setCandidateManifesto('');
+      setCandidateAvatar('');
+      await loadCandidates(selectedElection.id);
+      Alert.alert(
+        'Candidate Added',
+        'Candidate has been added to this election.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Could Not Add Candidate',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setAddingCandidate(false);
+    }
   };
 
   const handleDeleteCandidate = async (candidate: ElectionCandidate) => {

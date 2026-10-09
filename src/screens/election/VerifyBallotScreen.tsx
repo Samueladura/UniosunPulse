@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {usePrefs, useThemedStyles} from '../../theme/PreferencesContext';
-import {castVote} from '../../services/supabase';
+import {castVote} from '../../services/backend';
 
 const LIGHT_COLORS = {
   bg: '#F5F6F8',
@@ -41,13 +41,16 @@ const DARK_COLORS = {
 
 interface VerifyBallotScreenProps {
   navigation?: any;
-  route?: {params?: {candidate?: any; electionId?: string}};
+  route?: {
+    params?: {candidate?: any; electionId?: string; positionId?: string};
+  };
 }
 
 const DEFAULT_CANDIDATE = {
   id: '2',
   name: 'Adebayo Oluwaseun',
   position: 'President',
+  position_id: '',
   photo_url: '',
   faculty: 'Engineering',
   level: '400 Level',
@@ -193,9 +196,15 @@ export default function VerifyBallotScreen({
 
   const handleConfirm = async () => {
     try {
+      const positionId = route?.params?.positionId || candidate.position_id;
+      if (!positionId) {
+        throw new Error(
+          'The selected candidate does not have a valid position.',
+        );
+      }
       const {receiptId, isDuplicate} = await castVote(
         electionId || '',
-        candidate.position || '',
+        positionId,
         candidate.id,
       );
       navigation?.navigate('VoteSuccess', {receiptId, isDuplicate, electionId});

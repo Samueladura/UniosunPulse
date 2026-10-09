@@ -16,8 +16,10 @@ import Icon from 'react-native-vector-icons/Feather';
 import {colors, spacing, radius, typography} from '../../theme/colors';
 import {adminService, ReportedPost} from '../../services/adminService';
 import {usePosts} from '../../context/PostsContext';
-import {supabase, fetchUserProfile} from '../../services/supabase';
+import {backend, fetchUserProfile} from '../../services/backend';
 import {launchImageLibrary} from 'react-native-image-picker';
+import type {Asset} from 'react-native-image-picker';
+import {isVideoUrl, uploadPostMedia} from '../../services/media';
 
 export default function AdminContentModerationScreen({navigation}: any) {
   const [activeTab, setActiveTab] = useState<'reports' | 'announce'>('reports');
@@ -27,8 +29,8 @@ export default function AdminContentModerationScreen({navigation}: any) {
   // Announcement Form state
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaAsset, setMediaAsset] = useState<Asset | null>(null);
   const [tag, setTag] = useState<'ANNOUNCEMENTS' | 'CAMPUS LIFE' | 'EVENTS'>(
     'ANNOUNCEMENTS',
   );
@@ -48,7 +50,7 @@ export default function AdminContentModerationScreen({navigation}: any) {
         setProfile({full_name: p.full_name, avatar_url: p.avatar_url});
       }
     })();
-    const channel = supabase
+    const channel = backend
       .channel('admin:reported_posts')
       .on(
         'postgres_changes',
@@ -63,7 +65,7 @@ export default function AdminContentModerationScreen({navigation}: any) {
       )
       .subscribe();
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, []);
 
@@ -114,6 +116,13 @@ export default function AdminContentModerationScreen({navigation}: any) {
     setPublishing(true);
     try {
       const AUTHOR_NAME = 'Campus Admin(Official)';
+      const media = mediaAsset
+        ? await uploadPostMedia(mediaAsset)
+        : mediaUrl.trim()
+        ? isVideoUrl(mediaUrl.trim())
+          ? {video: mediaUrl.trim()}
+          : {image: mediaUrl.trim()}
+        : {};
       await addPost({
         author_id: 'admin_official',
         author_name: AUTHOR_NAME,
@@ -121,7 +130,8 @@ export default function AdminContentModerationScreen({navigation}: any) {
         avatar: profile?.avatar_url || '',
         title: title.trim(),
         body: body.trim(),
-        image: imageUri || imageUrl.trim() || null,
+        image: media.image ?? null,
+        video: media.video ?? null,
         tag: tag,
         like_count: 0,
         comment_count: 0,
@@ -130,27 +140,35 @@ export default function AdminContentModerationScreen({navigation}: any) {
       setPublishing(false);
       setTitle('');
       setBody('');
-      setImageUrl('');
-      setImageUri(null);
+      setMediaUrl('');
+      setMediaAsset(null);
       Alert.alert(
         'Announcement Published!',
         'Official announcement is now live at the top of the campus feed.',
       );
-    } catch {
+    } catch (error) {
       setPublishing(false);
-      Alert.alert('Error', 'Failed to publish announcement.');
+      Alert.alert(
+        'Error',
+        error instanceof Error
+          ? error.message
+          : 'Failed to publish announcement.',
+      );
     }
   };
 
-  const handlePickImage = async () => {
+  const handlePickMedia = async (mediaType: 'photo' | 'video') => {
     const result = await launchImageLibrary({
-      mediaType: 'photo',
+      mediaType,
       selectionLimit: 1,
       quality: 0.8,
     });
     const asset = result.assets?.[0];
-    if (asset?.uri) {
-      setImageUri(asset.uri);
+    if (result.errorMessage) {
+      Alert.alert('Media selection failed', result.errorMessage);
+    } else if (asset?.uri) {
+      setMediaAsset(asset);
+      setMediaUrl('');
     }
   };
 
@@ -315,27 +333,51 @@ export default function AdminContentModerationScreen({navigation}: any) {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Optional Banner Image URL</Text>
+            <Text style={styles.label}>Optional Image or Video URL</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="https://images.unsplash.com/..."
+              placeholder="Paste an image or video URL"
               placeholderTextColor={colors.textMuted}
-              value={imageUrl}
-              onChangeText={setImageUrl}
+              value={mediaUrl}
+              onChangeText={value => {
+                setMediaUrl(value);
+                setMediaAsset(null);
+              }}
             />
           </View>
 
-          <TouchableOpacity
-            style={styles.pickImageBtn}
-            onPress={handlePickImage}>
-            <Icon name="image" size={18} color={colors.white} />
-            <Text style={styles.pickImageText}>
-              {imageUri ? 'Change Image' : 'Pick Image'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.mediaPickers}>
+            <TouchableOpacity
+              style={styles.pickImageBtn}
+              onPress={() => handlePickMedia('photo')}>
+              <Icon name="image" size={18} color={colors.white} />
+              <Text style={styles.pickImageText}>Pick Image</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.pickImageBtn}
+              onPress={() => handlePickMedia('video')}>
+              <Icon name="video" size={18} color={colors.white} />
+              <Text style={styles.pickImageText}>Pick Video</Text>
+            </TouchableOpacity>
+          </View>
 
-          {imageUri ? (
-            <Image source={{uri: imageUri}} style={styles.previewImage} />
+          {mediaAsset?.uri ? (
+            <View style={styles.mediaPreview}>
+              {mediaAsset.type?.startsWith('video/') ? (
+                <View style={styles.videoPreview}>
+                  <Icon name="video" size={36} color={colors.white} />
+                  <Text style={styles.videoPreviewText}>
+                    {mediaAsset.fileName || 'Video selected'}
+                  </Text>
+                </View>
+              ) : (
+                <Image
+                  source={{uri: mediaAsset.uri}}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              )}
+            </View>
           ) : null}
 
           <TouchableOpacity
@@ -578,6 +620,17 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 6,
   },
+  mediaPickers: {flexDirection: 'row', gap: spacing.sm},
+  mediaPreview: {marginTop: spacing.sm},
+  videoPreview: {
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.textPrimary,
+    borderRadius: radius.md,
+  },
+  videoPreviewText: {color: colors.white, fontSize: 13},
   pickImageText: {
     color: colors.white,
     fontWeight: '700',

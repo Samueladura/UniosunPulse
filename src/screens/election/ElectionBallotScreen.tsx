@@ -10,12 +10,12 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {usePrefs, useThemedStyles} from '../../theme/PreferencesContext';
-import {supabase} from '../../services/supabase';
+import {backend} from '../../services/backend';
 import {
   fetchCandidates,
   fetchPositions,
   type Candidate as CandidateBase,
-} from '../../services/supabase';
+} from '../../services/backend';
 
 const LIGHT_COLORS = {
   bg: '#F5F6F8',
@@ -308,7 +308,7 @@ export default function ElectionBallotScreen({navigation, route}: any) {
       return;
     }
 
-    const channel = supabase
+    const channel = backend
       .channel('election-ballot')
       .on(
         'postgres_changes',
@@ -326,7 +326,7 @@ export default function ElectionBallotScreen({navigation, route}: any) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, [electionId]);
 
@@ -340,7 +340,7 @@ export default function ElectionBallotScreen({navigation, route}: any) {
     navigation?.navigate('VerifyBallot', {
       candidate,
       electionId: electionId,
-      positionId: candidate?.position || '',
+      positionId: candidate?.position_id || '',
     });
   };
 

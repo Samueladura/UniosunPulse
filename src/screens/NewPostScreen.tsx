@@ -11,12 +11,14 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {postCategories} from '../data/mockData';
-import {fetchUserProfile, UserProfile} from '../services/supabase';
+import {fetchUserProfile, UserProfile} from '../services/backend';
 import {usePosts} from '../context/PostsContext';
 import {useNavigation} from '@react-navigation/native';
 import {type NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
 import {launchImageLibrary} from 'react-native-image-picker';
+import type {Asset} from 'react-native-image-picker';
+import {uploadPostMedia} from '../services/media';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewPost'>;
 
@@ -26,7 +28,7 @@ export default function NewPostScreen({}: Props) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [mediaAsset, setMediaAsset] = useState<Asset | null>(null);
   const {addPost} = usePosts();
   const navigation = useNavigation();
 
@@ -58,10 +60,12 @@ export default function NewPostScreen({}: Props) {
     setError(null);
 
     try {
+      const media = mediaAsset ? await uploadPostMedia(mediaAsset) : {};
       await addPost({
         title: trimmed,
         body: trimmed,
-        image: imageUri || null,
+        image: media.image ?? null,
+        video: media.video,
         tag: category.toUpperCase(),
         author: displayName,
         avatar: avatarUrl,
@@ -73,7 +77,7 @@ export default function NewPostScreen({}: Props) {
 
       setText('');
       setCategory('Announcements');
-      setImageUri(null);
+      setMediaAsset(null);
       navigation.goBack();
     } catch (e: any) {
       setError(e?.message ?? 'Failed to create post. Please try again.');
@@ -82,15 +86,17 @@ export default function NewPostScreen({}: Props) {
     }
   };
 
-  const handlePickImage = async () => {
+  const handlePickMedia = async (mediaType: 'photo' | 'video') => {
     const result = await launchImageLibrary({
-      mediaType: 'photo',
+      mediaType,
       selectionLimit: 1,
       quality: 0.8,
     });
     const asset = result.assets?.[0];
-    if (asset?.uri) {
-      setImageUri(asset.uri);
+    if (result.errorMessage) {
+      setError(result.errorMessage);
+    } else if (asset?.uri) {
+      setMediaAsset(asset);
     }
   };
 
@@ -155,12 +161,25 @@ export default function NewPostScreen({}: Props) {
           onChangeText={setText}
         />
 
-        {imageUri ? (
+        {mediaAsset?.uri ? (
           <View style={styles.imagePreviewWrap}>
-            <Image source={{uri: imageUri}} style={styles.imagePreview} />
+            {mediaAsset.type?.startsWith('video/') ? (
+              <View style={styles.videoPreview}>
+                <Icon name="video" size={36} color={colors.white} />
+                <Text style={styles.videoPreviewName}>
+                  {mediaAsset.fileName || 'Video selected'}
+                </Text>
+              </View>
+            ) : (
+              <Image
+                source={{uri: mediaAsset.uri}}
+                style={styles.imagePreview}
+                resizeMode="contain"
+              />
+            )}
             <TouchableOpacity
               style={styles.removeImageBtn}
-              onPress={() => setImageUri(null)}>
+              onPress={() => setMediaAsset(null)}>
               <Icon name="x" size={16} color={colors.white} />
             </TouchableOpacity>
           </View>
@@ -195,8 +214,17 @@ export default function NewPostScreen({}: Props) {
 
       <View style={styles.toolbar}>
         <View style={styles.toolbarLeft}>
-          <TouchableOpacity style={styles.toolIcon} onPress={handlePickImage}>
+          <TouchableOpacity
+            accessibilityLabel="Select a photo"
+            style={styles.toolIcon}
+            onPress={() => handlePickMedia('photo')}>
             <Icon name="image" size={20} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityLabel="Select a video"
+            style={styles.toolIcon}
+            onPress={() => handlePickMedia('video')}>
+            <Icon name="video" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.toolIcon}>
             <Icon name="bar-chart-2" size={20} color={colors.textPrimary} />
@@ -284,6 +312,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     borderRadius: radius.md,
+    backgroundColor: '#111111',
+  },
+  videoPreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: radius.md,
+    backgroundColor: colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  videoPreviewName: {
+    maxWidth: '90%',
+    color: colors.white,
+    fontSize: 13,
   },
   removeImageBtn: {
     position: 'absolute',

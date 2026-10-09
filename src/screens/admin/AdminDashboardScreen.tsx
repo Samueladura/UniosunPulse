@@ -12,7 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import {colors, spacing, radius, typography} from '../../theme/colors';
 import {adminService, AdminMetrics} from '../../services/adminService';
-import {supabase} from '../../services/supabase';
+import {backend} from '../../services/backend';
 
 export default function AdminDashboardScreen({navigation}: any) {
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ export default function AdminDashboardScreen({navigation}: any) {
     loadMetrics();
     loadAuditLogs();
 
-    const channel = supabase
+    const channel = backend
       .channel('admin:full_dashboard')
       .on(
         'postgres_changes',
@@ -123,7 +123,7 @@ export default function AdminDashboardScreen({navigation}: any) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, []);
 
@@ -253,6 +253,36 @@ export default function AdminDashboardScreen({navigation}: any) {
             <Text style={styles.actionTitle}>Election & Voting Center</Text>
             <Text style={styles.actionDesc}>
               Configure SUG elections, register candidates & view live tallies.
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('AdminEvents')}>
+          <View style={[styles.actionIcon, styles.actionIconBlue]}>
+            <Icon name="calendar" size={24} color={colors.interestBlue} />
+          </View>
+          <View style={styles.flexOne}>
+            <Text style={styles.actionTitle}>Campus Event Management</Text>
+            <Text style={styles.actionDesc}>
+              Create and update events, control capacity, and manage RSVPs.
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('AdminMarketplaceReports')}>
+          <View style={[styles.actionIcon, styles.actionIconRed]}>
+            <Icon name="shopping-bag" size={24} color={colors.danger} />
+          </View>
+          <View style={styles.flexOne}>
+            <Text style={styles.actionTitle}>Marketplace Safety Reports</Text>
+            <Text style={styles.actionDesc}>
+              Review reports and remove listings that violate marketplace rules.
             </Text>
           </View>
           <Icon name="chevron-right" size={20} color={colors.textMuted} />

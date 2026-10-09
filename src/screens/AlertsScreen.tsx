@@ -15,9 +15,9 @@ import {usePrefs, useThemedStyles} from '../theme/PreferencesContext';
 import {
   fetchAlerts,
   markAllAlertsRead,
-  supabase,
+  backend,
   type Alert,
-} from '../services/supabase';
+} from '../services/backend';
 import {useAlerts} from '../context/AlertsContext';
 
 const LIGHT_COLORS = {
@@ -476,7 +476,7 @@ export default function AlertsScreen() {
   }, [unreadCount, setGlobalUnreadCount]);
 
   useEffect(() => {
-    const channel = supabase
+    const channel = backend
       .channel('alerts:realtime')
       .on(
         'postgres_changes',
@@ -494,7 +494,7 @@ export default function AlertsScreen() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      backend.removeChannel(channel);
     };
   }, []);
 
