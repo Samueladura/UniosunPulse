@@ -64,6 +64,41 @@ export default function HomeScreen({navigation}: Props) {
           matters.
         </Text>
 
+        <View style={styles.quickActionsRow}>
+          {[
+            {
+              label: 'Feed',
+              icon: 'home',
+              onPress: () => navigation.replace('Home'),
+            },
+            {
+              label: 'Marketplace',
+              icon: 'shopping-bag',
+              onPress: () => navigation.navigate('Marketplace'),
+            },
+            {
+              label: 'Clubs',
+              icon: 'users',
+              onPress: () => navigation.navigate('Clubs'),
+            },
+            {
+              label: 'Career Board',
+              icon: 'briefcase',
+              onPress: () => navigation.navigate('CareerBoard'),
+            },
+          ].map(item => (
+            <TouchableOpacity
+              key={item.label}
+              accessibilityRole="button"
+              activeOpacity={0.8}
+              onPress={item.onPress}
+              style={styles.quickActionBtn}>
+              <Icon name={item.icon} size={18} color={colors.primary} />
+              <Text style={styles.quickActionLabel}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <View style={styles.pulseCard}>
           <View style={styles.pulseIcon}>
             <Icon name="radio" size={26} color={colors.primary} />
@@ -347,4 +382,27 @@ const getStyles = () =>
     },
     stepSub: {fontSize: 12, color: colors.textSecondary},
     goLink: {color: colors.primary, fontWeight: '700', fontSize: 13},
+    quickActionsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: spacing.lg,
+      justifyContent: 'space-between',
+    },
+    quickActionBtn: {
+      width: '48%',
+      minHeight: 52,
+      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: radius.md,
+    },
+    quickActionLabel: {
+      marginLeft: spacing.sm,
+      color: colors.textPrimary,
+      fontWeight: '600',
+    },
   });

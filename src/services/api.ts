@@ -47,6 +47,14 @@ export async function apiFetch<T>(
     try {
       payload = JSON.parse(text);
     } catch {
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        throw new Error(
+          retryAfter
+            ? `Too many requests. Please try again in ${retryAfter} seconds.`
+            : 'Too many requests. Please wait a few minutes and try again.',
+        );
+      }
       if (response.status === 404) {
         throw new Error(
           'The API endpoint was not found (404). Check that API_BASE_URL points to the backend and includes /api.',

@@ -81,7 +81,31 @@ app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({origin: process.env.CORS_ORIGIN?.split(',') || true}));
 app.use(express.json({limit: '2mb'}));
-app.use('/api/auth', rateLimit({windowMs: 15 * 60 * 1000, limit: 30}));
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) =>
+    sendError(
+      res,
+      429,
+      'Too many authentication requests. Please wait before trying again.',
+    ),
+});
+const signInRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) =>
+    sendError(
+      res,
+      429,
+      'Too many sign-in attempts. Please wait 15 minutes before trying again.',
+    ),
+});
+app.use('/api/auth', authRateLimit);
 
 function asyncRoute(handler) {
   return (req, res, next) =>
@@ -1756,6 +1780,7 @@ app.post(
 
 app.post(
   '/api/auth/sign-in',
+  signInRateLimit,
   asyncRoute(async (req, res) => {
     const email = parseEmail(req.body?.email);
     const password = String(req.body?.password || '');

@@ -92,6 +92,7 @@ export function PreferencesProvider({children}: {children: ReactNode}) {
   // Whenever prefs change, apply the theme + text scale.
   const isDark = prefs.dark_mode;
   useEffect(() => {
+    Appearance.setColorScheme(isDark ? 'dark' : 'light');
     applyTheme(isDark);
     applyTextScale(textSizeScale(prefs.text_size));
     setThemeVersion(v => v + 1);
