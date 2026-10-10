@@ -1,7 +1,7 @@
 import {API_BASE_URL} from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:4000/api';
+const DEFAULT_API_BASE_URL = 'https://uniosunpulsebackend.onrender.com';
 const ACCESS_TOKEN_KEY = 'uniosunpulse.access_token';
 const baseUrl = (API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '');
 let sessionExpiredHandler: (() => void) | null = null;
