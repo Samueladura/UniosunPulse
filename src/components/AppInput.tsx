@@ -67,7 +67,7 @@ export default function AppInput({
       },
       inputRowFocused: {
         borderColor: colors.primary,
-        backgroundColor: colors.white,
+        backgroundColor: colors.surface,
       },
       leftIcon: {
         marginRight: spacing.sm,
