@@ -24,23 +24,17 @@ import {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Search'>;
 
-type SearchType = 'All' | 'Feed' | 'Events' | 'Marketplace' | 'Jobs' | 'Clubs';
+type SearchType = 'All' | 'Feed' | 'Marketplace';
 
 const FILTERS: SearchType[] = [
   'All',
   'Feed',
-  'Events',
   'Marketplace',
-  'Jobs',
-  'Clubs',
 ];
 const SEARCH_TYPE: Record<SearchType, CampusSearchType | 'all'> = {
   All: 'all',
   Feed: 'feed',
-  Events: 'events',
   Marketplace: 'marketplace',
-  Jobs: 'jobs',
-  Clubs: 'clubs',
 };
 
 export default function SearchScreen({navigation}: Props) {
@@ -124,13 +118,10 @@ export default function SearchScreen({navigation}: Props) {
       }
       return;
     }
-    const destination = {
-      event: 'Events',
-      marketplace: 'Marketplace',
-      career: 'CareerBoard',
-      club: 'Clubs',
-    }[item.item_type] as 'Events' | 'Marketplace' | 'CareerBoard' | 'Clubs';
-    navigation.navigate(destination);
+    if (item.item_type === 'marketplace') {
+      navigation.navigate('Marketplace');
+    }
+    // Other item types (event, career, club) have been removed
   };
 
   const toggleSave = async (item: CampusSearchResult) => {

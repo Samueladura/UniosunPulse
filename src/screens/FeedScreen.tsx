@@ -187,14 +187,11 @@ export default function FeedScreen({navigation}: Props) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.quickLinks}>
         {[
-          {label: 'Events', icon: 'calendar', route: 'Events' as const},
           {
             label: 'Marketplace',
             icon: 'shopping-bag',
             route: 'Marketplace' as const,
           },
-          {label: 'Career', icon: 'briefcase', route: 'CareerBoard' as const},
-          {label: 'Clubs', icon: 'users', route: 'Clubs' as const},
         ].map(link => (
           <TouchableOpacity
             key={link.route}

@@ -71,21 +71,6 @@ export default function HomeScreen({navigation}: Props) {
               icon: 'home',
               onPress: () => navigation.replace('Home'),
             },
-            {
-              label: 'Marketplace',
-              icon: 'shopping-bag',
-              onPress: () => navigation.navigate('Marketplace'),
-            },
-            {
-              label: 'Clubs',
-              icon: 'users',
-              onPress: () => navigation.navigate('Clubs'),
-            },
-            {
-              label: 'Career Board',
-              icon: 'briefcase',
-              onPress: () => navigation.navigate('CareerBoard'),
-            },
           ].map(item => (
             <TouchableOpacity
               key={item.label}

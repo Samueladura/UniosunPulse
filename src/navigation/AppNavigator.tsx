@@ -18,11 +18,8 @@ import LiveResultsScreen from '../screens/election/LiveResultsScreen';
 import VerifyEmailScreen from '../screens/VerifyEmailScreen';
 import PasswordResetScreen from '../screens/PasswordResetScreen';
 import SearchScreen from '../screens/SearchScreen';
-import EventsScreen from '../screens/EventsScreen';
 import MarketplaceScreen from '../screens/MarketplaceScreen';
 import SavedScreen from '../screens/SavedScreen';
-import CareerBoardScreen from '../screens/CareerBoardScreen';
-import ClubsScreen from '../screens/ClubsScreen';
 
 // Admin Suite Screens
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
@@ -53,6 +50,7 @@ import {
 export type MainTabParamList = {
   Feed: undefined;
   Election: undefined;
+  Marketplace: undefined;
   Alerts: undefined;
   Profile: undefined;
 };
@@ -67,11 +65,8 @@ export type RootStackParamList = {
   Home: undefined;
   NewPost: undefined;
   Search: undefined;
-  Events: undefined;
   Marketplace: undefined;
   Saved: undefined;
-  CareerBoard: undefined;
-  Clubs: undefined;
   Settings: undefined;
   PostDetail: {post?: any};
   UserProfile: {userId: string};
@@ -160,6 +155,9 @@ function AlertsTabIcon({color, size}: {color: string; size: number}) {
 function ProfileTabIcon({color, size}: {color: string; size: number}) {
   return <Icon name="user" color={color} size={size} />;
 }
+function MarketplaceTabIcon({color, size}: {color: string; size: number}) {
+  return <Icon name="shopping-bag" color={color} size={size} />;
+}
 
 function SettingsSlot({navigation, route}: any) {
   return <SettingsScreen navigation={navigation} route={route} />;
@@ -192,6 +190,11 @@ function MainTabs() {
           name="Election"
           component={ElectionStack}
           options={{tabBarIcon: ElectionTabIcon}}
+        />
+        <Tab.Screen
+          name="Marketplace"
+          component={MarketplaceScreen}
+          options={{tabBarIcon: MarketplaceTabIcon}}
         />
         <Tab.Screen
           name="Alerts"
@@ -267,11 +270,8 @@ export default function AppNavigator() {
       <Stack.Screen name="Welcome" component={HomeScreen} />
       <Stack.Screen name="Home" component={MainTabs} />
       <Stack.Screen name="Search" component={SearchScreen} />
-      <Stack.Screen name="Events" component={EventsScreen} />
       <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
       <Stack.Screen name="Saved" component={SavedScreen} />
-      <Stack.Screen name="CareerBoard" component={CareerBoardScreen} />
-      <Stack.Screen name="Clubs" component={ClubsScreen} />
       <Stack.Screen
         name="NewPost"
         component={NewPostScreen}

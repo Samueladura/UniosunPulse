@@ -88,13 +88,10 @@ export default function SavedScreen({navigation}: Props) {
       return;
     }
 
-    const destination = {
-      event: 'Events',
-      marketplace: 'Marketplace',
-      career: 'CareerBoard',
-      club: 'Clubs',
-    }[item.item_type] as 'Events' | 'Marketplace' | 'CareerBoard' | 'Clubs';
-    navigation.navigate(destination);
+    if (item.item_type === 'marketplace') {
+      navigation.navigate('Marketplace');
+    }
+    // Other item types (event, career, club) have been removed
   };
 
   return (
