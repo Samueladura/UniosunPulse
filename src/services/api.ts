@@ -1,9 +1,15 @@
 import {API_BASE_URL} from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_API_BASE_URL = 'https://uniosunpulsebackend.onrender.com';
+const DEFAULT_API_BASE_URL = 'https://uniosunpulsebackend.onrender.com/api';
 const ACCESS_TOKEN_KEY = 'uniosunpulse.access_token';
-const baseUrl = (API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '');
+const configuredBaseUrl = (API_BASE_URL || DEFAULT_API_BASE_URL).replace(
+  /\/+$/,
+  '',
+);
+const baseUrl = /\/api$/i.test(configuredBaseUrl)
+  ? configuredBaseUrl
+  : `${configuredBaseUrl}/api`;
 let sessionExpiredHandler: (() => void) | null = null;
 
 export function setSessionExpiredHandler(handler: (() => void) | null) {
@@ -41,6 +47,11 @@ export async function apiFetch<T>(
     try {
       payload = JSON.parse(text);
     } catch {
+      if (response.status === 404) {
+        throw new Error(
+          'The API endpoint was not found (404). Check that API_BASE_URL points to the backend and includes /api.',
+        );
+      }
       throw new Error(`The API returned invalid JSON (${response.status}).`);
     }
   }
