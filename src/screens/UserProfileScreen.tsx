@@ -339,7 +339,6 @@ export default function UserProfileScreen({navigation, route}: Props) {
                     post: {...post, authorId: resolvedUser.id},
                   })
                 }>
-                <Text style={styles.postCardTitle}>{post.title}</Text>
                 <Text style={styles.postCardBody} numberOfLines={2}>
                   {post.body}
                 </Text>

@@ -297,7 +297,6 @@ export default function FeedScreen({navigation}: Props) {
               </View>
             </View>
 
-            <Text style={styles.postTitle}>{item.title}</Text>
             <Text style={styles.postBody}>{item.body}</Text>
 
             <PostMedia image={item.image} video={item.video} />

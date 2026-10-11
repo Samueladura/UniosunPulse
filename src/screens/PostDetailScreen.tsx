@@ -563,7 +563,6 @@ export default function PostDetailScreen({navigation, route}: Props) {
           </View>
         ) : null}
 
-        <Text style={styles.postTitle}>{postTitle}</Text>
         <Text style={styles.postBody}>{postBody}</Text>
 
         <View style={styles.statsRow}>

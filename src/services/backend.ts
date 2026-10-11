@@ -932,7 +932,7 @@ export interface Post {
   author_id: string;
   author_name: string;
   avatar: string | null;
-  title: string;
+  title?: string;
   body: string | null;
   image: string | null;
   video?: string | null;
@@ -945,7 +945,7 @@ export interface Post {
 }
 
 export interface PostCreate {
-  title: string;
+  title?: string;
   body?: string;
   image?: string;
   video?: string;

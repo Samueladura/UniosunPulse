@@ -62,7 +62,7 @@ export default function NewPostScreen({}: Props) {
     try {
       const media = mediaAsset ? await uploadPostMedia(mediaAsset) : {};
       await addPost({
-        title: trimmed,
+        title: '',
         body: trimmed,
         image: media.image ?? null,
         video: media.video,
