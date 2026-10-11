@@ -17,6 +17,7 @@ import {
   signOutUser,
   rpcCall,
   dbQuery,
+  sendEmailViaAppsScript,
 } from './api';
 import {apiFetch, apiGet} from './api';
 
@@ -1678,10 +1679,13 @@ export async function submitFeedback(message: string): Promise<void> {
     throw new Error('User not authenticated');
   }
 
+  const userName = user.user_metadata?.full_name ?? 'Unknown User';
+  const userEmail = user.email ?? 'No email';
+
   const {error} = await backend.from('feedback').insert({
     user_id: user.id,
-    user_name: user.user_metadata?.full_name ?? null,
-    user_email: user.email ?? null,
+    user_name: userName,
+    user_email: userEmail,
     message,
     status: 'pending',
   });
@@ -1689,6 +1693,22 @@ export async function submitFeedback(message: string): Promise<void> {
   if (error) {
     throw new Error(error.message);
   }
+
+  // Send email notification to admin
+  const adminEmail = 'official.uniosun@edu.ng';
+  await sendEmailViaAppsScript({
+    to: adminEmail,
+    subject: `New Feedback from ${userName}`,
+    body: `New feedback received from ${userName} (${userEmail}):\n\n${message}`,
+    html: `
+      <h2>New Feedback Received</h2>
+      <p><strong>From:</strong> ${userName} (${userEmail})</p>
+      <p><strong>Message:</strong></p>
+      <p>${message.replace(/\n/g, '<br>')}</p>
+      <hr>
+      <p><small>Sent from UniOsun Pulse App</small></p>
+    `,
+  });
 }
 
 export async function fetchFeedback(): Promise<Feedback[]> {

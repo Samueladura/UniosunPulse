@@ -1,4 +1,4 @@
-import {API_BASE_URL} from '@env';
+import {API_BASE_URL, APPS_SCRIPT_EMAIL_URL} from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEFAULT_API_BASE_URL = 'https://uniosunpulsebackend.onrender.com/api';
@@ -265,4 +265,44 @@ export async function dbQuery<T>(table: string, payload: Record<string, any>) {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+// Google Apps Script Email Integration
+// Deploy your Apps Script as a Web App and set APPS_SCRIPT_EMAIL_URL in .env
+export interface SendEmailParams {
+  to: string;
+  subject: string;
+  body: string;
+  html?: string;
+}
+
+export async function sendEmailViaAppsScript(params: SendEmailParams) {
+  const appsScriptUrl = APPS_SCRIPT_EMAIL_URL;
+  if (!appsScriptUrl) {
+    console.warn('APPS_SCRIPT_EMAIL_URL not configured, skipping email');
+    return {success: false, error: 'Email service not configured'};
+  }
+
+  try {
+    const response = await fetch(appsScriptUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Apps Script returned ${response.status}`);
+    }
+
+    const result = await response.json();
+    return {success: true, data: result};
+  } catch (error) {
+    console.error('Failed to send email via Apps Script:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 }
