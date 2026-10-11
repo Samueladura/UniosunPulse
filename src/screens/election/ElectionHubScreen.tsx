@@ -498,9 +498,6 @@ export default function ElectionHubScreen({navigation}: any) {
           style={styles.headerLogo}
         />
         <Text style={styles.headerTitle}>UniOsun Pulse</Text>
-        <TouchableOpacity>
-          <Icon name="settings" size={20} color={C.text} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -648,7 +645,8 @@ export default function ElectionHubScreen({navigation}: any) {
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeaderText2}>Recent Results</Text>
-          <TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation?.navigate('ElectionArchives')}>
             <Text style={styles.viewArchivesText}>View Archives</Text>
           </TouchableOpacity>
         </View>
@@ -680,7 +678,12 @@ export default function ElectionHubScreen({navigation}: any) {
                     Winner:{' '}
                     <Text style={styles.textBold700}>{result.winner}</Text>
                   </Text>
-                  <TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation?.navigate('LiveResults', {
+                        electionId: result.id,
+                      })
+                    }>
                     <Text style={styles.viewDataText}>View Data</Text>
                   </TouchableOpacity>
                 </View>

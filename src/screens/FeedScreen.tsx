@@ -6,7 +6,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  ScrollView,
   RefreshControl,
   Image,
   TouchableOpacity,
@@ -181,27 +180,6 @@ export default function FeedScreen({navigation}: Props) {
           </TouchableOpacity>
         </View>
       </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.quickLinks}>
-        {[
-          {
-            label: 'Marketplace',
-            icon: 'shopping-bag',
-            route: 'Marketplace' as const,
-          },
-        ].map(link => (
-          <TouchableOpacity
-            key={link.route}
-            style={styles.quickLink}
-            onPress={() => rootNav?.navigate(link.route)}>
-            <Icon name={link.icon} size={14} color={colors.primary} />
-            <Text style={styles.quickLinkText}>{link.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
 
       <View style={styles.filterWrapper}>
         <FlatList
@@ -517,28 +495,6 @@ const getStyles = () =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-    },
-    quickLinks: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      gap: spacing.sm,
-      backgroundColor: colors.card,
-    },
-    quickLink: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.xs,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.pill,
-      backgroundColor: colors.background,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    quickLinkText: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.textPrimary,
     },
     filterWrapper: {
       backgroundColor: colors.card,

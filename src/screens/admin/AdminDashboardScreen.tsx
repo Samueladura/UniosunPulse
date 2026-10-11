@@ -318,6 +318,21 @@ export default function AdminDashboardScreen({navigation}: any) {
           <Icon name="chevron-right" size={20} color={colors.textMuted} />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('AdminFeedback')}>
+          <View style={[styles.actionIcon, styles.actionIconPurple]}>
+            <Icon name="message-square" size={24} color="#7C3AED" />
+          </View>
+          <View style={styles.flexOne}>
+            <Text style={styles.actionTitle}>Feedback Management</Text>
+            <Text style={styles.actionDesc}>
+              Review and manage user feedback submissions.
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
+
         {/* Audit Stream Preview */}
         <Text style={styles.sectionTitle}>Recent Audit Activity</Text>
         <View style={styles.auditBox}>

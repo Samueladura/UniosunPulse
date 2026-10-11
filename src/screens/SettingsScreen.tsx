@@ -14,6 +14,7 @@ import {
   Modal,
   FlatList,
   TextInput,
+  Clipboard,
 } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -31,10 +32,8 @@ import {
   fetchBlockedUsers,
   unblockUser,
   fetchLoginHistory,
-  saveLanguage,
-  getLanguageLabel,
   getFollowerCount,
-  SUPPORTED_LANGUAGES,
+  submitFeedback,
   UserProfile,
   UserPreferences,
 } from '../services/backend';
@@ -214,8 +213,10 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
   >([]);
   const [loginLoading, setLoginLoading] = useState<boolean>(false);
 
-  // Language
-  const [showLanguageModal, setShowLanguageModal] = useState<boolean>(false);
+  // Feedback modal
+  const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
+  const [feedbackText, setFeedbackText] = useState<string>('');
+  const [feedbackSending, setFeedbackSending] = useState<boolean>(false);
 
   // Edit profile / change password modals
   const [showEditProfileModal, setShowEditProfileModal] =
@@ -456,12 +457,22 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
     setLoginLoading(false);
   };
 
-  const handlePickLanguage = async (code: string) => {
-    setShowLanguageModal(false);
-    setSaving(true);
-    await saveLanguage(code);
-    await updatePrefs({...prefs, language: code});
-    setSaving(false);
+  const handleSubmitFeedback = async () => {
+    if (!feedbackText.trim()) {
+      Alert.alert('Empty Feedback', 'Please enter your feedback before submitting.');
+      return;
+    }
+    setFeedbackSending(true);
+    try {
+      await submitFeedback(feedbackText.trim());
+      Alert.alert('Feedback Sent', 'Thank you for your feedback! Our team will review it.');
+      setFeedbackText('');
+      setShowFeedbackModal(false);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to send feedback. Please try again.');
+    } finally {
+      setFeedbackSending(false);
+    }
   };
 
   if (loading) {
@@ -527,11 +538,7 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
             {profile?.verified ? 'Verified Student' : 'Verification Pending'}
           </Text>
           <Text style={styles.verifySub}>
-            {profile?.department
-              ? `${profile.department}${
-                  profile.matric_number ? ` • ${profile.matric_number}` : ''
-                }`
-              : 'Complete your profile to verify'}
+            {profile?.verified ? 'Verified Student' : 'Complete your profile to verify'}
           </Text>
 
           <View style={styles.verifyDivider} />
@@ -718,13 +725,6 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
             onValueChange={v => persistPrefs({...prefs, dark_mode: v})}
           />
           <Divider />
-          <NavRow
-            icon={<Feather name="globe" size={18} color={colors.textPrimary} />}
-            label="Language"
-            sublabel={getLanguageLabel(prefs.language)}
-            onPress={() => setShowLanguageModal(true)}
-          />
-          <Divider />
 
           {/* Text size */}
           <View style={styles.navRow}>
@@ -784,38 +784,13 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
           <NavRow
             icon={
               <Feather
-                name="help-circle"
+                name="message-circle"
                 size={18}
                 color={colors.textPrimary}
               />
             }
-            label="Help Center"
-            onPress={() => {}}
-            external
-          />
-          <Divider />
-          <NavRow
-            icon={
-              <Feather
-                name="alert-circle"
-                size={18}
-                color={colors.textPrimary}
-              />
-            }
-            label="Report a Problem"
-            onPress={() => {}}
-          />
-          <Divider />
-          <NavRow
-            icon={
-              <MaterialCommunityIcons
-                name="file-document-outline"
-                size={18}
-                color={colors.textPrimary}
-              />
-            }
-            label="Terms of Service"
-            onPress={() => {}}
+            label="Drop Feedback"
+            onPress={() => setShowFeedbackModal(true)}
           />
           <Divider />
           <NavRow
@@ -862,9 +837,19 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
               />
             ) : null}
             {twoFactorSecret ? (
-              <Text style={styles.modalSecret}>
-                Manual key: {twoFactorSecret}
-              </Text>
+              <View style={styles.secretRow}>
+                <Text style={styles.modalSecret}>
+                  Manual key: {twoFactorSecret}
+                </Text>
+                <TouchableOpacity
+                  style={styles.copyBtn}
+                  onPress={() => {
+                    Clipboard.setString(twoFactorSecret);
+                    Alert.alert('Copied', 'Manual key copied to clipboard');
+                  }}>
+                  <Feather name="copy" size={16} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
             ) : null}
             <TextInput
               style={styles.modalInput}
@@ -1071,37 +1056,42 @@ export default function SettingsScreen({navigation}: SettingsScreenProps) {
         </View>
       </Modal>
 
-      {/* Language picker modal */}
+      {/* Drop Feedback modal */}
       <Modal
-        visible={showLanguageModal}
+        visible={showFeedbackModal}
         transparent
-        animationType="fade"
-        onRequestClose={() => setShowLanguageModal(false)}>
+        animationType="slide"
+        onRequestClose={() => setShowFeedbackModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Language</Text>
-            <FlatList
-              data={[...SUPPORTED_LANGUAGES]}
-              keyExtractor={item => item.code}
-              renderItem={({item}) => (
-                <TouchableOpacity
-                  style={styles.langItem}
-                  onPress={() => handlePickLanguage(item.code)}>
-                  <Text style={styles.langItemText}>{item.label}</Text>
-                  {prefs.language === item.code && (
-                    <Feather name="check" size={18} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
+            <Text style={styles.modalTitle}>Drop Feedback</Text>
+            <Text style={styles.modalText}>
+              Share your thoughts, suggestions, or report issues. Your feedback helps
+              us improve UniOsun Pulse.
+            </Text>
+            <TextInput
+              style={[styles.modalInput, styles.feedbackInput]}
+              placeholder="Type your feedback here..."
+              placeholderTextColor={colors.textMuted}
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+              multiline
+              maxLength={2000}
+            />
+            <AppButtonWide
+              label={feedbackSending ? 'Sending...' : 'Submit Feedback'}
+              loading={feedbackSending}
+              onPress={handleSubmitFeedback}
             />
             <TouchableOpacity
               style={styles.modalCloseBtn}
-              onPress={() => setShowLanguageModal(false)}>
-              <Text style={styles.modalCloseBtnText}>Close</Text>
+              onPress={() => setShowFeedbackModal(false)}>
+              <Text style={styles.modalCloseBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1355,6 +1345,16 @@ const getStyles = () =>
       color: colors.textSecondary,
       fontFamily: Platform.select({ios: 'Courier', android: 'monospace'}),
       marginBottom: 12,
+      flex: 1,
+    },
+    secretRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 12,
+    },
+    copyBtn: {
+      padding: 6,
     },
     qrImage: {width: 200, height: 200, alignSelf: 'center', marginVertical: 8},
     modalInput: {
@@ -1367,6 +1367,11 @@ const getStyles = () =>
       color: colors.textPrimary,
       marginBottom: 14,
       textAlign: 'center',
+    },
+    feedbackInput: {
+      textAlign: 'left',
+      textAlignVertical: 'top',
+      minHeight: 120,
     },
     wideButton: {
       backgroundColor: colors.primary,

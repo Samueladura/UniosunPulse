@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
   Image,
   Modal,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
+import {useFocusEffect} from '@react-navigation/native';
 
 interface Props {
   image?: string | null;
@@ -18,6 +19,19 @@ interface Props {
 export default function PostMedia({image, video}: Props) {
   const [imageExpanded, setImageExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const videoRef = useRef<Video>(null);
+
+  // Pause video when screen loses focus (user navigates to another tab)
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.pause();
+        }
+        setPlaying(false);
+      };
+    }, []),
+  );
 
   if (video) {
     return (
@@ -25,10 +39,11 @@ export default function PostMedia({image, video}: Props) {
         style={styles.videoWrap}
         onTouchStart={event => event.stopPropagation()}>
         <Video
+          ref={videoRef}
           source={{uri: video}}
           style={styles.media}
           resizeMode="contain"
-          controls
+          controls={false}
           paused={!playing}
           onEnd={() => setPlaying(false)}
           onError={() => setPlaying(false)}

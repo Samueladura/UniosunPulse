@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import {launchImageLibrary, Asset} from 'react-native-image-picker';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
+import {useThemedStyles} from '../theme/PreferencesContext';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {
   createMarketplaceListing,
@@ -34,7 +35,192 @@ import {uploadPostMedia} from '../services/media';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Marketplace'>;
 
+function getStyles(C: typeof colors) {
+  return StyleSheet.create({
+    safe: {flex: 1, backgroundColor: C.background},
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: C.card,
+      borderBottomWidth: 1,
+      borderBottomColor: C.border,
+    },
+    headerTitle: {...typography.h3, color: C.textPrimary},
+    headerSpacer: {width: 22},
+    listContent: {padding: spacing.md, paddingBottom: spacing.xl},
+    errorText: {
+      color: C.danger,
+      fontSize: 13,
+      marginBottom: spacing.md,
+    },
+    emptyText: {
+      color: C.textSecondary,
+      textAlign: 'center',
+      marginTop: spacing.xl,
+    },
+    card: {
+      backgroundColor: C.card,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: C.border,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm,
+    },
+    categoryBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 5,
+      borderRadius: radius.pill,
+    },
+    categoryText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: C.textPrimary,
+      textTransform: 'uppercase',
+    },
+    price: {
+      fontSize: 17,
+      fontWeight: '800',
+      color: C.primary,
+    },
+    title: {...typography.h3, color: C.textPrimary},
+    subtitle: {
+      marginTop: 6,
+      fontSize: 14,
+      color: C.textSecondary,
+      lineHeight: 20,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: spacing.sm,
+    },
+    metaText: {fontSize: 13, color: C.textSecondary},
+    ctaButton: {
+      marginTop: spacing.md,
+      backgroundColor: C.primary,
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 9,
+    },
+    ctaText: {fontSize: 12, fontWeight: '700', color: C.white},
+    photoStrip: {marginBottom: spacing.md},
+    listingPhoto: {
+      width: 230,
+      height: 165,
+      marginRight: spacing.sm,
+      borderRadius: radius.sm,
+      backgroundColor: C.background,
+    },
+    sellerActions: {flexDirection: 'row', gap: spacing.md, marginTop: spacing.md},
+    actionLink: {fontSize: 12, fontWeight: '700', color: C.primary},
+    removeLink: {color: C.danger},
+    reportButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: spacing.md,
+    },
+    reportText: {fontSize: 12, color: C.textSecondary},
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    formCard: {
+      backgroundColor: C.card,
+      padding: spacing.md,
+      borderTopLeftRadius: radius.lg,
+      borderTopRightRadius: radius.lg,
+      gap: spacing.sm,
+    },
+    formHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    formTitle: {...typography.h3, color: C.textPrimary},
+    formInput: {
+      borderWidth: 1,
+      borderColor: C.border,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      color: C.textPrimary,
+      backgroundColor: C.background,
+    },
+    formDescription: {minHeight: 78, textAlignVertical: 'top'},
+    imageLabel: {fontSize: 13, color: C.textPrimary, fontWeight: '700'},
+    photoPreviewWrap: {position: 'relative', marginRight: spacing.sm},
+    photoPreview: {width: 76, height: 76, borderRadius: radius.sm},
+    removePhoto: {
+      position: 'absolute',
+      top: 3,
+      right: 3,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: C.danger,
+    },
+    addPhoto: {
+      width: 76,
+      height: 76,
+      borderRadius: radius.sm,
+      borderWidth: 1,
+      borderColor: C.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+    },
+    reasonRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: 5,
+    },
+    publishButton: {
+      alignItems: 'center',
+      backgroundColor: C.primary,
+      borderRadius: radius.pill,
+      padding: spacing.md,
+      marginTop: spacing.xs,
+    },
+    publishText: {color: C.white, fontWeight: '700'},
+    disabledButton: {opacity: 0.55},
+  });
+}
+
+function getBadgeColor(category: string, C: typeof colors): string {
+  switch (category) {
+    case 'Textbooks':
+      return C.tagAnnouncements;
+    case 'Electronics':
+      return C.tagCampusLife;
+    case 'Fashion':
+      return C.tagEvents;
+    default:
+      return C.surface;
+  }
+}
+
 export default function MarketplaceScreen({navigation}: Props) {
+  const styles = useThemedStyles(getStyles);
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -359,7 +545,7 @@ export default function MarketplaceScreen({navigation}: Props) {
               <View
                 style={[
                   styles.categoryBadge,
-                  {backgroundColor: getBadgeColor(item.category)},
+                  {backgroundColor: getBadgeColor(item.category, colors)},
                 ]}>
                 <Text style={styles.categoryText}>{item.category}</Text>
               </View>
@@ -599,185 +785,3 @@ export default function MarketplaceScreen({navigation}: Props) {
     </SafeAreaView>
   );
 }
-
-function getBadgeColor(category: string): string {
-  switch (category) {
-    case 'Textbooks':
-      return '#E0F2FE';
-    case 'Electronics':
-      return '#DCFCE7';
-    case 'Fashion':
-      return '#FDE68A';
-    default:
-      return '#E5E7EB';
-  }
-}
-
-const styles = StyleSheet.create({
-  safe: {flex: 1, backgroundColor: colors.background},
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {...typography.h3, color: colors.textPrimary},
-  headerSpacer: {width: 22},
-  listContent: {padding: spacing.md, paddingBottom: spacing.xl},
-  errorText: {
-    color: colors.danger,
-    fontSize: 13,
-    marginBottom: spacing.md,
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xl,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  categoryBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textTransform: 'uppercase',
-  },
-  price: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  title: {...typography.h3, color: colors.textPrimary},
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: spacing.sm,
-  },
-  metaText: {fontSize: 13, color: colors.textSecondary},
-  ctaButton: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 9,
-  },
-  ctaText: {fontSize: 12, fontWeight: '700', color: colors.white},
-  photoStrip: {marginBottom: spacing.md},
-  listingPhoto: {
-    width: 230,
-    height: 165,
-    marginRight: spacing.sm,
-    borderRadius: radius.sm,
-    backgroundColor: colors.background,
-  },
-  sellerActions: {flexDirection: 'row', gap: spacing.md, marginTop: spacing.md},
-  actionLink: {fontSize: 12, fontWeight: '700', color: colors.primary},
-  removeLink: {color: colors.danger},
-  reportButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: spacing.md,
-  },
-  reportText: {fontSize: 12, color: colors.textSecondary},
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  formCard: {
-    backgroundColor: colors.card,
-    padding: spacing.md,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    gap: spacing.sm,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  formTitle: {...typography.h3, color: colors.textPrimary},
-  formInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    backgroundColor: colors.background,
-  },
-  formDescription: {minHeight: 78, textAlignVertical: 'top'},
-  imageLabel: {fontSize: 13, color: colors.textPrimary, fontWeight: '700'},
-  photoPreviewWrap: {position: 'relative', marginRight: spacing.sm},
-  photoPreview: {width: 76, height: 76, borderRadius: radius.sm},
-  removePhoto: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.danger,
-  },
-  addPhoto: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  reasonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 5,
-  },
-  publishButton: {
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    padding: spacing.md,
-    marginTop: spacing.xs,
-  },
-  publishText: {color: colors.white, fontWeight: '700'},
-  disabledButton: {opacity: 0.55},
-});

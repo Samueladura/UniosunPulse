@@ -15,6 +15,7 @@ import ElectionBallotScreen from '../screens/election/ElectionBallotScreen';
 import VerifyBallotScreen from '../screens/election/VerifyBallotScreen';
 import VoteSuccessScreen from '../screens/election/VoteSuccessScreen';
 import LiveResultsScreen from '../screens/election/LiveResultsScreen';
+import ElectionArchivesScreen from '../screens/election/ElectionArchivesScreen';
 import VerifyEmailScreen from '../screens/VerifyEmailScreen';
 import PasswordResetScreen from '../screens/PasswordResetScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -31,6 +32,7 @@ import AdminBroadcastAlertScreen from '../screens/admin/AdminBroadcastAlertScree
 import AdminMyPostsScreen from '../screens/admin/AdminMyPostsScreen';
 import AdminEventsScreen from '../screens/admin/AdminEventsScreen';
 import AdminMarketplaceReportsScreen from '../screens/admin/AdminMarketplaceReportsScreen';
+import AdminFeedbackScreen from '../screens/admin/AdminFeedbackScreen';
 
 import {AlertsProvider, useAlerts} from '../context/AlertsContext';
 import {setSessionExpiredHandler} from '../services/api';
@@ -80,6 +82,7 @@ export type RootStackParamList = {
   AdminMyPosts: undefined;
   AdminEvents: undefined;
   AdminMarketplaceReports: undefined;
+  AdminFeedback: undefined;
   AdminLiveResults: {electionId?: string};
 };
 
@@ -96,6 +99,7 @@ export type ElectionStackParamList = {
     electionId?: string;
   };
   LiveResults: {electionId?: string};
+  ElectionArchives: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -115,6 +119,7 @@ function ElectionStack() {
       <ElectionNav.Screen name="VerifyBallot" component={VerifyBallotScreen} />
       <ElectionNav.Screen name="VoteSuccess" component={VoteSuccessScreen} />
       <ElectionNav.Screen name="LiveResults" component={LiveResultsScreen} />
+      <ElectionNav.Screen name="ElectionArchives" component={ElectionArchivesScreen} />
     </ElectionNav.Navigator>
   );
 }
@@ -309,6 +314,7 @@ export default function AppNavigator() {
         name="AdminMarketplaceReports"
         component={AdminMarketplaceReportsScreen}
       />
+      <Stack.Screen name="AdminFeedback" component={AdminFeedbackScreen} />
       <Stack.Screen name="AdminLiveResults" component={LiveResultsScreen} />
     </Stack.Navigator>
   );

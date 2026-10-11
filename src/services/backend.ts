@@ -579,7 +579,7 @@ export async function fetchUserProfileById(
     const {data, error} = await backend
       .from('profiles')
       .select(
-        'id, full_name, avatar_url, department, matric_number, verified, preferences',
+        'id, full_name, avatar_url, department, matric_number, verified, preferences, email',
       )
       .eq('id', userId)
       .maybeSingle();
@@ -592,7 +592,7 @@ export async function fetchUserProfileById(
       return {
         id: data.id,
         full_name: data.full_name ?? null,
-        email: null,
+        email: data.email ?? null,
         avatar_url: data.avatar_url ?? null,
         department: data.department ?? null,
         matric_number: data.matric_number ?? null,
@@ -1181,6 +1181,11 @@ export async function followUser(followingId: string): Promise<void> {
   if (!user) {
     return;
   }
+  
+  // Prevent users from following themselves
+  if (user.id === followingId) {
+    throw new Error('You cannot follow yourself');
+  }
 
   await backend
     .from('follows')
@@ -1405,6 +1410,19 @@ export async function fetchElections(): Promise<Election[]> {
     return [];
   }
   return data as Election[];
+}
+
+export async function fetchElectionById(id: string): Promise<Election | null> {
+  const {data, error} = await backend
+    .from('elections')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+  return data as Election;
 }
 
 export async function fetchPositions(electionId: string): Promise<Position[]> {
@@ -1637,4 +1655,65 @@ export async function getTotalVotes(electionId: string): Promise<number> {
     return 0;
   }
   return count || 0;
+}
+
+// ---------------------------------------------------------------------------
+// Feedback
+// ---------------------------------------------------------------------------
+export interface Feedback {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  user_email: string | null;
+  message: string;
+  created_at: string;
+  status: 'pending' | 'reviewed' | 'resolved';
+}
+
+export async function submitFeedback(message: string): Promise<void> {
+  const {
+    data: {user},
+  } = await backend.auth.getUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const {error} = await backend.from('feedback').insert({
+    user_id: user.id,
+    user_name: user.user_metadata?.full_name ?? null,
+    user_email: user.email ?? null,
+    message,
+    status: 'pending',
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function fetchFeedback(): Promise<Feedback[]> {
+  const {data, error} = await backend
+    .from('feedback')
+    .select('*')
+    .order('created_at', {ascending: false})
+    .limit(100);
+
+  if (error || !data) {
+    return [];
+  }
+  return data as Feedback[];
+}
+
+export async function updateFeedbackStatus(
+  feedbackId: string,
+  status: 'pending' | 'reviewed' | 'resolved',
+): Promise<void> {
+  const {error} = await backend
+    .from('feedback')
+    .update({status})
+    .eq('id', feedbackId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }

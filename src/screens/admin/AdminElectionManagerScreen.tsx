@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -21,18 +21,55 @@ import {
 } from '../../services/adminService';
 import {backend} from '../../services/backend';
 
-const isElectionEnded = (election: AdminElection) => {
-  if (!election.endTime) {
-    return false;
+type LiveStatus = 'pending' | 'active' | 'ended';
+
+const toTime = (iso?: string | null): number | null => {
+  if (!iso) {
+    return null;
   }
-  return new Date(election.endTime) < new Date();
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
 };
+
+/**
+ * Works out the real status of an election from its start/end time.
+ *  - before startTime            -> pending
+ *  - between startTime and endTime -> active
+ *  - after endTime               -> ended
+ * An election that an admin closed manually (stored status "ended") stays ended.
+ * An election with no times at all falls back to its stored status.
+ */
+const getLiveStatus = (election: AdminElection, now: number): LiveStatus => {
+  const start = toTime(election.startTime);
+  const end = toTime(election.endTime);
+
+  if (election.status === 'ended') {
+    return 'ended';
+  }
+  if (end !== null && now > end) {
+    return 'ended';
+  }
+  if (start !== null && now < start) {
+    return 'pending';
+  }
+  if (start !== null || end !== null) {
+    return 'active';
+  }
+  // No schedule set: rely on the stored status
+  return election.status === 'active' ? 'active' : 'pending';
+};
+
+const hasSchedule = (election: AdminElection) =>
+  toTime(election.startTime) !== null || toTime(election.endTime) !== null;
 
 const formatDateTime = (iso: string | undefined) => {
   if (!iso) {
     return null;
   }
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
   const day = date.getDate().toString().padStart(2, '0');
   const month = date.toLocaleString('en-US', {month: 'short'});
   const year = date.getFullYear();
@@ -46,15 +83,41 @@ const formatDateTime = (iso: string | undefined) => {
   };
 };
 
+const formatDuration = (ms: number) => {
+  const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+};
+
+const getCountdownLabel = (election: AdminElection, now: number) => {
+  const status = getLiveStatus(election, now);
+  const start = toTime(election.startTime);
+  const end = toTime(election.endTime);
+  if (status === 'pending' && start !== null) {
+    return `Starts in ${formatDuration(start - now)}`;
+  }
+  if (status === 'active' && end !== null) {
+    return `Ends in ${formatDuration(end - now)}`;
+  }
+  return null;
+};
+
 export default function AdminElectionManagerScreen({navigation}: any) {
   const [loading, setLoading] = useState(true);
   const [elections, setElections] = useState<AdminElection[]>([]);
+  const [now, setNow] = useState(Date.now());
   const [showCandidatesModal, setShowCandidatesModal] = useState(false);
   const [selectedElection, setSelectedElection] =
     useState<AdminElection | null>(null);
   const [candidates, setCandidates] = useState<ElectionCandidate[]>([]);
-  const [_loadingCandidates, setLoadingCandidates] = useState(false);
-  const [_deleting, setDeleting] = useState(false);
 
   // Candidate Form
   const [candidateName, setCandidateName] = useState('');
@@ -63,100 +126,136 @@ export default function AdminElectionManagerScreen({navigation}: any) {
   const [candidateAvatar, setCandidateAvatar] = useState('');
   const [addingCandidate, setAddingCandidate] = useState(false);
 
+  // Keeps the latest selected election available to realtime callbacks
+  const selectedElectionRef = useRef<AdminElection | null>(null);
   useEffect(() => {
-    loadElections();
+    selectedElectionRef.current = selectedElection;
+  }, [selectedElection]);
+
+  // Remembers which status writes were already sent to the database
+  const syncedRef = useRef<Record<string, string>>({});
+
+  const loadElections = useCallback(async (showSpinner = false) => {
+    if (showSpinner) {
+      setLoading(true);
+    }
+    try {
+      await adminService.syncElectionStatuses();
+      const data = await adminService.getAdminElections();
+      setElections(data);
+    } catch (error) {
+      console.warn('Failed to load elections', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadCandidates = useCallback(async (electionId: string) => {
+    try {
+      const data = await adminService.getCandidates(electionId);
+      setCandidates(data);
+    } catch (error) {
+      console.warn('Failed to load candidates', error);
+    }
+  }, []);
+
+  // Initial load + realtime subscription (subscribed once)
+  useEffect(() => {
+    loadElections(true);
+
     const channel = backend
       .channel('admin:elections')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'elections',
-        },
-        loadElections,
+        {event: '*', schema: 'public', table: 'elections'},
+        () => loadElections(),
       )
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'election_votes',
-        },
+        {event: 'INSERT', schema: 'public', table: 'election_votes'},
         () => {
           loadElections();
-          if (selectedElection) {
-            loadCandidates(selectedElection.id);
+          if (selectedElectionRef.current) {
+            loadCandidates(selectedElectionRef.current.id);
           }
         },
       )
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'election_candidates',
-        },
+        {event: '*', schema: 'public', table: 'election_candidates'},
         () => {
-          if (selectedElection) {
-            loadCandidates(selectedElection.id);
+          loadElections();
+          if (selectedElectionRef.current) {
+            loadCandidates(selectedElectionRef.current.id);
           }
         },
       )
       .subscribe();
+
     return () => {
       backend.removeChannel(channel);
     };
-  }, [selectedElection]);
+  }, [loadElections, loadCandidates]);
 
+  // Refresh when the screen regains focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadElections();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, loadElections]);
 
+  // Refetch from the server every 30 seconds
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadElections();
-    }, 30000);
+    const interval = setInterval(() => loadElections(), 30000);
+    return () => clearInterval(interval);
+  }, [loadElections]);
+
+  // Tick the clock every 5 seconds so statuses and countdowns update live
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadElections = async () => {
-    setLoading(true);
-    const data = await adminService.getAdminElections();
-
-    const now = new Date();
-    const endedIds = data
-      .filter(
-        e => e.status === 'active' && e.endTime && new Date(e.endTime) < now,
-      )
-      .map(e => e.id);
-
-    if (endedIds.length > 0) {
-      await Promise.all(
-        endedIds.map(id => adminService.updateElectionStatus(id, 'ended')),
-      );
-      const refreshed = await adminService.getAdminElections();
-      setElections(refreshed);
-    } else {
-      setElections(data);
-    }
-    setLoading(false);
-  };
-
-  const loadCandidates = async (electionId: string) => {
-    setLoadingCandidates(true);
-    const data = await adminService.getCandidates(electionId);
-    setCandidates(data);
-    setLoadingCandidates(false);
-  };
+  // When the clock crosses a start/end time, save the new status to the database
+  useEffect(() => {
+    elections.forEach(e => {
+      if (!hasSchedule(e)) {
+        return;
+      }
+      const live = getLiveStatus(e, now);
+      const target =
+        live === 'active' ? 'active' : live === 'ended' ? 'ended' : null;
+      if (!target || e.status === target) {
+        return;
+      }
+      if (syncedRef.current[e.id] === target) {
+        return;
+      }
+      syncedRef.current[e.id] = target;
+      adminService
+        .updateElectionStatus(e.id, target)
+        .then(() => {
+          setElections(prev =>
+            prev.map(x => (x.id === e.id ? {...x, status: target} : x)),
+          );
+        })
+        .catch(() => {
+          delete syncedRef.current[e.id];
+        });
+    });
+  }, [now, elections]);
 
   const openCandidates = async (election: AdminElection) => {
     setSelectedElection(election);
     setShowCandidatesModal(true);
     await loadCandidates(election.id);
+  };
+
+  const closeCandidates = () => {
+    setShowCandidatesModal(false);
+    setSelectedElection(null);
+    setCandidates([]);
   };
 
   const handleToggleStatus = async (
@@ -166,25 +265,31 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     if (
       newStatus === 'active' &&
       election.maxCandidates &&
-      election.maxCandidates > 0
+      election.maxCandidates > 0 &&
+      election.candidatesCount > election.maxCandidates
     ) {
-      if (election.candidatesCount > election.maxCandidates) {
-        Alert.alert(
-          'Cannot Launch',
-          `Candidate limit exceeded. Max allowed: ${election.maxCandidates}, current: ${election.candidatesCount}.`,
-        );
-        return;
-      }
+      Alert.alert(
+        'Cannot Launch',
+        `Candidate limit exceeded. Max allowed: ${election.maxCandidates}, current: ${election.candidatesCount}.`,
+      );
+      return;
     }
 
-    await adminService.updateElectionStatus(election.id, newStatus);
-    setElections(prev =>
-      prev.map(e => (e.id === election.id ? {...e, status: newStatus} : e)),
-    );
-    Alert.alert(
-      'Status Updated',
-      `Election status changed to ${newStatus.toUpperCase()}`,
-    );
+    try {
+      await adminService.updateElectionStatus(election.id, newStatus);
+      setElections(prev =>
+        prev.map(e => (e.id === election.id ? {...e, status: newStatus} : e)),
+      );
+      Alert.alert(
+        'Status Updated',
+        `Election status changed to ${newStatus.toUpperCase()}`,
+      );
+    } catch (error) {
+      Alert.alert(
+        'Could Not Update Status',
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    }
   };
 
   const handleAddCandidate = async () => {
@@ -227,7 +332,7 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     }
   };
 
-  const handleDeleteCandidate = async (candidate: ElectionCandidate) => {
+  const handleDeleteCandidate = (candidate: ElectionCandidate) => {
     Alert.alert(
       'Remove Candidate',
       `Remove ${candidate.name} from this election?`,
@@ -237,15 +342,24 @@ export default function AdminElectionManagerScreen({navigation}: any) {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            await adminService.deleteCandidate(candidate.id);
-            await loadCandidates(selectedElection!.id);
+            try {
+              await adminService.deleteCandidate(candidate.id);
+              if (selectedElectionRef.current) {
+                await loadCandidates(selectedElectionRef.current.id);
+              }
+            } catch (error) {
+              Alert.alert(
+                'Could Not Remove Candidate',
+                error instanceof Error ? error.message : 'Please try again.',
+              );
+            }
           },
         },
       ],
     );
   };
 
-  const handleDeleteElection = async (election: AdminElection) => {
+  const handleDeleteElection = (election: AdminElection) => {
     Alert.alert(
       'Delete Election',
       `Permanently delete "${election.title}" and all its candidates?`,
@@ -255,11 +369,16 @@ export default function AdminElectionManagerScreen({navigation}: any) {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            setDeleting(true);
-            await adminService.deleteElection(election.id);
-            setElections(prev => prev.filter(e => e.id !== election.id));
-            setDeleting(false);
-            Alert.alert('Deleted', 'Election has been removed.');
+            try {
+              await adminService.deleteElection(election.id);
+              setElections(prev => prev.filter(e => e.id !== election.id));
+              Alert.alert('Deleted', 'Election has been removed.');
+            } catch (error) {
+              Alert.alert(
+                'Could Not Delete Election',
+                error instanceof Error ? error.message : 'Please try again.',
+              );
+            }
           },
         },
       ],
@@ -273,20 +392,46 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     });
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date().toISOString();
-      elections.forEach(e => {
-        if (e.status === 'active' && e.endTime && now > e.endTime) {
-          adminService.updateElectionStatus(e.id, 'ended');
-          setElections(prev =>
-            prev.map(x => (x.id === e.id ? {...x, status: 'ended'} : x)),
-          );
-        }
-      });
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [elections]);
+  const renderStatusAction = (item: AdminElection, live: LiveStatus) => {
+    if (live === 'ended') {
+      return (
+        <TouchableOpacity style={styles.closedBtn} disabled>
+          <Icon name="lock" size={14} color={colors.white} />
+          <Text style={styles.endText}>Vote Closed</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    if (live === 'pending') {
+      // Scheduled election: it will start by itself at the start time
+      if (hasSchedule(item)) {
+        return (
+          <View style={styles.pendingBtn}>
+            <Icon name="clock" size={14} color={colors.white} />
+            <Text style={styles.endText}>Not Started</Text>
+          </View>
+        );
+      }
+      // No schedule: admin can launch manually
+      return (
+        <TouchableOpacity
+          style={styles.activateBtn}
+          onPress={() => handleToggleStatus(item, 'active')}>
+          <Icon name="play" size={14} color={colors.white} />
+          <Text style={styles.activateText}>Launch Election</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <TouchableOpacity
+        style={styles.endBtn}
+        onPress={() => handleToggleStatus(item, 'ended')}>
+        <Icon name="stop-circle" size={14} color={colors.white} />
+        <Text style={styles.endText}>Close Voting</Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -319,124 +464,127 @@ export default function AdminElectionManagerScreen({navigation}: any) {
       ) : (
         <FlatList
           data={elections}
+          extraData={now}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({item}) => (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={styles.catBadge}>
-                  <Text style={styles.catBadgeText}>{item.category}</Text>
-                </View>
+          renderItem={({item}) => {
+            const live = getLiveStatus(item, now);
+            const countdown = getCountdownLabel(item, now);
+            const startFmt = formatDateTime(item.startTime);
+            const endFmt = formatDateTime(item.endTime);
 
-                <View
-                  style={[
-                    styles.statusBadge,
-                    item.status === 'active'
-                      ? styles.badgeActive
-                      : item.status === 'ended'
-                      ? styles.badgeEnded
-                      : styles.badgeDraft,
-                  ]}>
-                  <Text
+            return (
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.catBadge}>
+                    <Text style={styles.catBadgeText}>{item.category}</Text>
+                  </View>
+
+                  <View
                     style={[
-                      styles.statusText,
-                      item.status === 'active'
-                        ? styles.textActive
-                        : item.status === 'ended'
-                        ? styles.textEnded
-                        : styles.textDraft,
+                      styles.statusBadge,
+                      live === 'active'
+                        ? styles.badgeActive
+                        : live === 'ended'
+                        ? styles.badgeEnded
+                        : styles.badgePending,
                     ]}>
-                    {item.status.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.electionTitle}>{item.title}</Text>
-              {item.description ? (
-                <Text style={styles.electionDesc}>{item.description}</Text>
-              ) : null}
-
-              {item.startTime || item.endTime ? (
-                <View style={styles.timeRow}>
-                  <Icon name="clock" size={14} color={colors.textSecondary} />
-                  <View style={styles.timeTextWrap}>
-                    <Text style={styles.timeText}>
-                      {formatDateTime(item.startTime)?.date || 'TBD'}
-                      {' · '}
-                      {formatDateTime(item.startTime)?.time || ''}
-                    </Text>
-                    <Text style={styles.timeText}>{' → '}</Text>
-                    <Text style={styles.timeText}>
-                      {formatDateTime(item.endTime)?.date || 'TBD'}
-                      {' · '}
-                      {formatDateTime(item.endTime)?.time || ''}
+                    <Text
+                      style={[
+                        styles.statusText,
+                        live === 'active'
+                          ? styles.textActive
+                          : live === 'ended'
+                          ? styles.textEnded
+                          : styles.textPending,
+                      ]}>
+                      {live.toUpperCase()}
                     </Text>
                   </View>
                 </View>
-              ) : null}
 
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Icon name="check-square" size={14} color={colors.primary} />
-                  <Text style={styles.statVal}>
-                    {item.totalVotes.toLocaleString()} Votes Cast
+                <Text style={styles.electionTitle}>{item.title}</Text>
+                {item.description ? (
+                  <Text style={styles.electionDesc}>{item.description}</Text>
+                ) : null}
+
+                {startFmt || endFmt ? (
+                  <View style={styles.timeRow}>
+                    <Icon name="clock" size={14} color={colors.textSecondary} />
+                    <View style={styles.timeTextWrap}>
+                      <Text style={styles.timeText}>
+                        {startFmt
+                          ? `${startFmt.date} · ${startFmt.time}`
+                          : 'TBD'}
+                      </Text>
+                      <Text style={styles.timeText}>{' → '}</Text>
+                      <Text style={styles.timeText}>
+                        {endFmt ? `${endFmt.date} · ${endFmt.time}` : 'TBD'}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {countdown ? (
+                  <Text
+                    style={[
+                      styles.countdownText,
+                      live === 'pending'
+                        ? styles.textPending
+                        : styles.textActive,
+                    ]}>
+                    {countdown}
                   </Text>
+                ) : null}
+
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Icon
+                      name="check-square"
+                      size={14}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.statVal}>
+                      {item.totalVotes.toLocaleString()} Votes Cast
+                    </Text>
+                  </View>
+
+                  <View style={styles.statItem}>
+                    <Icon name="users" size={14} color={colors.textSecondary} />
+                    <Text style={styles.statVal}>
+                      {item.candidatesCount} Candidates
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={styles.statItem}>
-                  <Icon name="users" size={14} color={colors.textSecondary} />
-                  <Text style={styles.statVal}>
-                    {item.candidatesCount} Candidates
-                  </Text>
+                {/* Status Action Buttons */}
+                <View style={styles.btnRow}>
+                  {renderStatusAction(item, live)}
+
+                  <TouchableOpacity
+                    style={styles.candidatesBtn}
+                    onPress={() => openCandidates(item)}>
+                    <Icon name="user" size={14} color={colors.primary} />
+                    <Text style={styles.candidatesText}>Candidates</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.resultsBtn}
+                    onPress={() => openLiveResults(item)}>
+                    <Icon name="bar-chart-2" size={14} color={colors.white} />
+                    <Text style={styles.resultsText}>Live Results</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => handleDeleteElection(item)}>
+                    <Icon name="trash-2" size={14} color={colors.white} />
+                    <Text style={styles.deleteText}>Delete</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-
-              {/* Status Action Buttons */}
-              <View style={styles.btnRow}>
-                {isElectionEnded(item) ? (
-                  <TouchableOpacity style={styles.endBtn} disabled>
-                    <Icon name="stop-circle" size={14} color={colors.white} />
-                    <Text style={styles.endText}>Vote Closed</Text>
-                  </TouchableOpacity>
-                ) : item.status !== 'active' ? (
-                  <TouchableOpacity
-                    style={styles.activateBtn}
-                    onPress={() => handleToggleStatus(item, 'active')}>
-                    <Icon name="play" size={14} color={colors.white} />
-                    <Text style={styles.activateText}>Launch Election</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.endBtn}
-                    onPress={() => handleToggleStatus(item, 'ended')}>
-                    <Icon name="stop-circle" size={14} color={colors.white} />
-                    <Text style={styles.endText}>Close Voting</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  style={styles.candidatesBtn}
-                  onPress={() => openCandidates(item)}>
-                  <Icon name="user" size={14} color={colors.primary} />
-                  <Text style={styles.candidatesText}>Candidates</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.resultsBtn}
-                  onPress={() => openLiveResults(item)}>
-                  <Icon name="bar-chart-2" size={14} color={colors.white} />
-                  <Text style={styles.resultsText}>Live Results</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => handleDeleteElection(item)}>
-                  <Icon name="trash-2" size={14} color={colors.white} />
-                  <Text style={styles.deleteText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+            );
+          }}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
               No election sessions currently scheduled.
@@ -446,18 +594,18 @@ export default function AdminElectionManagerScreen({navigation}: any) {
       )}
 
       {/* Candidates Modal */}
-      <Modal visible={showCandidatesModal} animationType="slide" transparent>
+      <Modal
+        visible={showCandidatesModal}
+        animationType="slide"
+        transparent
+        onRequestClose={closeCandidates}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, styles.modalCardTall]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 Candidates: {selectedElection?.title}
               </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowCandidatesModal(false);
-                  setSelectedElection(null);
-                }}>
+              <TouchableOpacity onPress={closeCandidates}>
                 <Icon name="x" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
@@ -537,6 +685,7 @@ export default function AdminElectionManagerScreen({navigation}: any) {
                   style={styles.input}
                   placeholder="https://..."
                   placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
                   value={candidateAvatar}
                   onChangeText={setCandidateAvatar}
                 />
@@ -617,6 +766,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  loadingWrap: {
+    marginTop: 40,
+  },
   listContent: {
     padding: spacing.md,
     gap: spacing.md,
@@ -652,11 +804,11 @@ const styles = StyleSheet.create({
   },
   badgeActive: {backgroundColor: '#DCFCE7'},
   badgeEnded: {backgroundColor: '#FEE2E2'},
-  badgeDraft: {backgroundColor: '#FEF3C7'},
+  badgePending: {backgroundColor: '#FEF3C7'},
   statusText: {fontSize: 10, fontWeight: '800'},
   textActive: {color: colors.primary},
   textEnded: {color: colors.danger},
-  textDraft: {color: '#D97706'},
+  textPending: {color: '#D97706'},
   electionTitle: {
     ...typography.h3,
     fontSize: 17,
@@ -682,6 +834,10 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  countdownText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   statsRow: {
     flexDirection: 'row',
@@ -723,6 +879,26 @@ const styles = StyleSheet.create({
     height: 36,
     paddingHorizontal: 12,
     backgroundColor: colors.danger,
+    borderRadius: radius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  closedBtn: {
+    height: 36,
+    paddingHorizontal: 12,
+    backgroundColor: colors.textMuted,
+    borderRadius: radius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  pendingBtn: {
+    height: 36,
+    paddingHorizontal: 12,
+    backgroundColor: '#D97706',
     borderRadius: radius.sm,
     flexDirection: 'row',
     alignItems: 'center',
@@ -797,6 +973,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.md,
   },
+  modalCardTall: {
+    maxHeight: '90%',
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -806,9 +985,16 @@ const styles = StyleSheet.create({
     ...typography.h3,
     fontSize: 18,
     color: colors.textPrimary,
+    flex: 1,
   },
   formGroup: {
     gap: 6,
+  },
+  formGroupFlex12: {
+    flex: 1.2,
+  },
+  formGroupFlex1: {
+    flex: 1,
   },
   rowGroup: {
     flexDirection: 'row',
@@ -832,35 +1018,6 @@ const styles = StyleSheet.create({
   textArea: {
     height: 70,
     textAlignVertical: 'top',
-  },
-  catSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  catChip: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-  },
-  activeCatChip: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  catChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  activeCatChipText: {
-    color: colors.white,
-  },
-  hintText: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: -4,
   },
   submitModalBtn: {
     height: 46,
@@ -899,6 +1056,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  flexOne: {
+    flex: 1,
+  },
   candidateName: {
     fontSize: 14,
     fontWeight: '700',
@@ -920,7 +1080,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   removeCandidateBtn: {
-    padding: 8,
+    padding: spacing.xs,
   },
   addCandidateForm: {
     borderTopWidth: 1,
@@ -929,13 +1089,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   formHeading: {
-    ...typography.h3,
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '800',
     color: colors.textPrimary,
   },
-  loadingWrap: {marginVertical: 40},
-  flexOne: {flex: 1},
-  modalCardTall: {maxHeight: '90%'},
-  formGroupFlex1: {flex: 1},
-  formGroupFlex12: {flex: 1.2},
 });

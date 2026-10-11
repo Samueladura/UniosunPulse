@@ -158,7 +158,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
         name: safeName,
         handle: '@student',
         avatar: profile.avatar_url || '',
-        bio: isAdmin ? 'Campus Admin' : profile.department || 'UniOsun student',
+        bio: isAdmin ? 'Campus Admin' : 'UniOsun Student',
         followers: isBabayemi ? 300 : followersCount,
         following: followingCount,
       };
@@ -182,14 +182,18 @@ export default function UserProfileScreen({navigation, route}: Props) {
     if (requestId === 'current') {
       return;
     }
-    if (isFollowingAuthor) {
-      await unfollowUser(requestId);
-      setIsFollowingAuthor(false);
-      setFollowersCount(prev => prev - 1);
-    } else {
-      await followUser(requestId);
-      setIsFollowingAuthor(true);
-      setFollowersCount(prev => prev + 1);
+    try {
+      if (isFollowingAuthor) {
+        await unfollowUser(requestId);
+        setIsFollowingAuthor(false);
+        setFollowersCount(prev => prev - 1);
+      } else {
+        await followUser(requestId);
+        setIsFollowingAuthor(true);
+        setFollowersCount(prev => prev + 1);
+      }
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Unable to follow user');
     }
   };
 

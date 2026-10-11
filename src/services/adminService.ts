@@ -1,4 +1,5 @@
 import {backend, fetchUserProfile} from './backend';
+import {apiFetch} from './api';
 
 type DataRow = Record<string, any>;
 
@@ -367,6 +368,19 @@ export const adminService = {
     endTime?: string,
     maxCandidates?: number,
   ): Promise<AdminElection> {
+    // Determine initial status based on start time
+    let initialStatus: 'draft' | 'active' = 'draft';
+    if (startTime) {
+      const start = new Date(startTime).getTime();
+      const now = Date.now();
+      if (start <= now) {
+        initialStatus = 'active';
+      }
+    } else {
+      // No start time specified, default to active immediately
+      initialStatus = 'active';
+    }
+
     const {data, error} = await backend
       .from('elections')
       .insert([
@@ -374,7 +388,7 @@ export const adminService = {
           title,
           category,
           description,
-          status: 'active',
+          status: initialStatus,
           start_time: startTime || null,
           end_time: endTime || null,
           start_at: startTime || null,
@@ -488,6 +502,15 @@ export const adminService = {
     try {
       await backend.from('election_candidates').delete().eq('election_id', id);
       await backend.from('elections').delete().eq('id', id);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  async syncElectionStatuses(): Promise<boolean> {
+    try {
+      await apiFetch('/admin/elections/sync-status', {method: 'POST'});
       return true;
     } catch {
       return false;

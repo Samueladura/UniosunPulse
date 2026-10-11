@@ -1259,6 +1259,46 @@ app.get(
   }),
 );
 
+// Sync election statuses based on time (admin only)
+app.post(
+  '/api/admin/elections/sync-status',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    if (!requireAdmin(req, res)) {
+      return;
+    }
+    const now = new Date();
+    // Auto-start elections that have reached their start time
+    await pool.query(
+      `UPDATE elections
+       SET status = 'active', updated_at = now()
+       WHERE status = 'draft'
+         AND (start_at IS NOT NULL OR start_time IS NOT NULL)
+         AND COALESCE(start_at, start_time) <= $1`,
+      [now],
+    );
+    // Auto-end elections that have passed their end time
+    await pool.query(
+      `UPDATE elections
+       SET status = 'ended', updated_at = now()
+       WHERE status = 'active'
+         AND (end_at IS NOT NULL OR end_time IS NOT NULL)
+         AND COALESCE(end_at, end_time) < $1`,
+      [now],
+    );
+    // Also close voting for elections that have ended but status is 'closed'
+    await pool.query(
+      `UPDATE elections
+       SET status = 'ended', updated_at = now()
+       WHERE status = 'closed'
+         AND (end_at IS NOT NULL OR end_time IS NOT NULL)
+         AND COALESCE(end_at, end_time) < $1`,
+      [now],
+    );
+    res.json({data: {synced: true}, error: null});
+  }),
+);
+
 app.patch(
   '/api/marketplace/:listingId',
   authenticate,

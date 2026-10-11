@@ -58,7 +58,7 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
     const [dd, mm, yyyy] = parts;
     const cleaned = time.replace(/[^0-9:APMapm]/g, '').trim();
     if (!cleaned) {
-      return `${yyyy}-${mm}-${dd}T00:00:00`;
+      return `${yyyy}-${mm}-${dd}T00:00:00+01:00`;
     }
     const [timePart, period] = cleaned.split(/(?=[APMapm])/i);
     const [hStr, mStr] = timePart.split(':');
@@ -72,14 +72,17 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
       hours = 0;
     }
     const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}T${pad(hours)}:${pad(minutes)}:00`;
+    // Add +01:00 timezone offset for West Africa Time (WAT)
+    return `${yyyy}-${mm}-${dd}T${pad(hours)}:${pad(minutes)}:00+01:00`;
   };
 
   const parseISODateTime = (iso: string): {date: string; time: string} => {
     if (!iso) {
       return {date: '', time: ''};
     }
-    const [datePart, timePart] = iso.split('T');
+    // Remove timezone offset if present
+    const cleanIso = iso.replace(/[+-]\d{2}:?\d{2}$/, '').replace(/Z$/, '');
+    const [datePart, timePart] = cleanIso.split('T');
     const [y, m, d] = (datePart || '').split('-');
     const [hStr, mStr] = (timePart || '').split(':');
     const hours = parseInt(hStr || '0', 10);
