@@ -21,36 +21,9 @@ import {
 } from '../../services/adminService';
 import {backend} from '../../services/backend';
 
-type LiveStatus = 'pending' | 'active' | 'ended';
-
-const toTime = (iso?: string | null): number | null => {
-  if (!iso) {
-    return null;
-  }
-  const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? null : t;
-};
-
-/**
- * Works out the real status of an election from its start/end time.
- *  - before startTime            -> pending
- *  - between startTime and endTime -> active
- *  - after endTime               -> ended
- * An election that an admin closed manually (stored status "ended") stays ended.
- * An election with no times at all falls back to its stored status.
- */
-const getLiveStatus = (election: AdminElection, now: number): LiveStatus => {
-  const start = toTime(election.startTime);
-  const end = toTime(election.endTime);
-
-  if (election.status === 'ended') {
-    return 'ended';
-  }
-  if (end !== null && now > end) {
-    return 'ended';
-  }
-  if (start !== null && now < start) {
-    return 'pending';
+const isElectionEnded = (election: AdminElection) => {
+  if (!election.endTime) {
+    return false;
   }
   if (start !== null || end !== null) {
     return 'active';
@@ -62,7 +35,9 @@ const getLiveStatus = (election: AdminElection, now: number): LiveStatus => {
 const hasSchedule = (election: AdminElection) =>
   toTime(election.startTime) !== null || toTime(election.endTime) !== null;
 
-const formatDateTime = (iso: string | undefined) => {
+const formatDateTime = (
+  iso: string | null | undefined,
+): {date: string; time: string} | null => {
   if (!iso) {
     return null;
   }
@@ -110,7 +85,11 @@ const getCountdownLabel = (election: AdminElection, now: number) => {
   return null;
 };
 
-export default function AdminElectionManagerScreen({navigation}: any) {
+export default function AdminElectionManagerScreen({
+  navigation,
+}: {
+  navigation: NavigationLike;
+}) {
   const [loading, setLoading] = useState(true);
   const [elections, setElections] = useState<AdminElection[]>([]);
   const [now, setNow] = useState(Date.now());
@@ -126,67 +105,39 @@ export default function AdminElectionManagerScreen({navigation}: any) {
   const [candidateAvatar, setCandidateAvatar] = useState('');
   const [addingCandidate, setAddingCandidate] = useState(false);
 
-  // Keeps the latest selected election available to realtime callbacks
-  const selectedElectionRef = useRef<AdminElection | null>(null);
   useEffect(() => {
-    selectedElectionRef.current = selectedElection;
-  }, [selectedElection]);
-
-  // Remembers which status writes were already sent to the database
-  const syncedRef = useRef<Record<string, string>>({});
-
-  const loadElections = useCallback(async (showSpinner = false) => {
-    if (showSpinner) {
-      setLoading(true);
-    }
-    try {
-      await adminService.syncElectionStatuses();
-      const data = await adminService.getAdminElections();
-      setElections(data);
-    } catch (error) {
-      console.warn('Failed to load elections', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadCandidates = useCallback(async (electionId: string) => {
-    try {
-      const data = await adminService.getCandidates(electionId);
-      setCandidates(data);
-    } catch (error) {
-      console.warn('Failed to load candidates', error);
-    }
-  }, []);
-
-  // Initial load + realtime subscription (subscribed once)
-  useEffect(() => {
-    loadElections(true);
-
+    loadElections();
     const channel = backend
       .channel('admin:elections')
       .on(
         'postgres_changes',
-        {event: '*', schema: 'public', table: 'elections'},
-        () => loadElections(),
+        {
+          event: '*',
+          schema: 'public',
+          table: 'elections',
+        },
+        loadElections,
       )
       .on(
         'postgres_changes',
         {event: 'INSERT', schema: 'public', table: 'election_votes'},
         () => {
           loadElections();
-          if (selectedElectionRef.current) {
-            loadCandidates(selectedElectionRef.current.id);
+          if (selectedElection) {
+            loadCandidates(selectedElection.id);
           }
         },
       )
       .on(
         'postgres_changes',
-        {event: '*', schema: 'public', table: 'election_candidates'},
+        {
+          event: '*',
+          schema: 'public',
+          table: 'election_candidates',
+        },
         () => {
-          loadElections();
-          if (selectedElectionRef.current) {
-            loadCandidates(selectedElectionRef.current.id);
+          if (selectedElection) {
+            loadCandidates(selectedElection.id);
           }
         },
       )
@@ -197,7 +148,6 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     };
   }, [loadElections, loadCandidates]);
 
-  // Refresh when the screen regains focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadElections();
@@ -205,7 +155,6 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     return unsubscribe;
   }, [navigation, loadElections]);
 
-  // Refetch from the server every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => loadElections(), 30000);
     return () => clearInterval(interval);
@@ -217,34 +166,35 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     return () => clearInterval(interval);
   }, []);
 
-  // When the clock crosses a start/end time, save the new status to the database
-  useEffect(() => {
-    elections.forEach(e => {
-      if (!hasSchedule(e)) {
-        return;
-      }
-      const live = getLiveStatus(e, now);
-      const target =
-        live === 'active' ? 'active' : live === 'ended' ? 'ended' : null;
-      if (!target || e.status === target) {
-        return;
-      }
-      if (syncedRef.current[e.id] === target) {
-        return;
-      }
-      syncedRef.current[e.id] = target;
-      adminService
-        .updateElectionStatus(e.id, target)
-        .then(() => {
-          setElections(prev =>
-            prev.map(x => (x.id === e.id ? {...x, status: target} : x)),
-          );
-        })
-        .catch(() => {
-          delete syncedRef.current[e.id];
-        });
-    });
-  }, [now, elections]);
+  const loadElections = async () => {
+    setLoading(true);
+    const data = await adminService.getAdminElections();
+
+    const now = new Date();
+    const endedIds = data
+      .filter(
+        e => e.status === 'active' && e.endTime && new Date(e.endTime) < now,
+      )
+      .map(e => e.id);
+
+    if (endedIds.length > 0) {
+      await Promise.all(
+        endedIds.map(id => adminService.updateElectionStatus(id, 'ended')),
+      );
+      const refreshed = await adminService.getAdminElections();
+      setElections(refreshed);
+    } else {
+      setElections(data);
+    }
+    setLoading(false);
+  };
+
+  const loadCandidates = async (electionId: string) => {
+    setLoadingCandidates(true);
+    const data = await adminService.getCandidates(electionId);
+    setCandidates(data);
+    setLoadingCandidates(false);
+  };
 
   const openCandidates = async (election: AdminElection) => {
     setSelectedElection(election);
@@ -260,7 +210,7 @@ export default function AdminElectionManagerScreen({navigation}: any) {
 
   const handleToggleStatus = async (
     election: AdminElection,
-    newStatus: 'active' | 'ended' | 'draft',
+    newStatus: ElectionStatus,
   ) => {
     if (
       newStatus === 'active' &&
@@ -332,7 +282,7 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     }
   };
 
-  const handleDeleteCandidate = (candidate: ElectionCandidate) => {
+  const handleDeleteCandidate = async (candidate: ElectionCandidate) => {
     Alert.alert(
       'Remove Candidate',
       `Remove ${candidate.name} from this election?`,
@@ -342,17 +292,8 @@ export default function AdminElectionManagerScreen({navigation}: any) {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            try {
-              await adminService.deleteCandidate(candidate.id);
-              if (selectedElectionRef.current) {
-                await loadCandidates(selectedElectionRef.current.id);
-              }
-            } catch (error) {
-              Alert.alert(
-                'Could Not Remove Candidate',
-                error instanceof Error ? error.message : 'Please try again.',
-              );
-            }
+            await adminService.deleteCandidate(candidate.id);
+            await loadCandidates(selectedElection!.id);
           },
         },
       ],
@@ -369,16 +310,11 @@ export default function AdminElectionManagerScreen({navigation}: any) {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            try {
-              await adminService.deleteElection(election.id);
-              setElections(prev => prev.filter(e => e.id !== election.id));
-              Alert.alert('Deleted', 'Election has been removed.');
-            } catch (error) {
-              Alert.alert(
-                'Could Not Delete Election',
-                error instanceof Error ? error.message : 'Please try again.',
-              );
-            }
+            setDeleting(true);
+            await adminService.deleteElection(election.id);
+            setElections(prev => prev.filter(e => e.id !== election.id));
+            setDeleting(false);
+            Alert.alert('Deleted', 'Election has been removed.');
           },
         },
       ],
@@ -392,46 +328,20 @@ export default function AdminElectionManagerScreen({navigation}: any) {
     });
   };
 
-  const renderStatusAction = (item: AdminElection, live: LiveStatus) => {
-    if (live === 'ended') {
-      return (
-        <TouchableOpacity style={styles.closedBtn} disabled>
-          <Icon name="lock" size={14} color={colors.white} />
-          <Text style={styles.endText}>Vote Closed</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    if (live === 'pending') {
-      // Scheduled election: it will start by itself at the start time
-      if (hasSchedule(item)) {
-        return (
-          <View style={styles.pendingBtn}>
-            <Icon name="clock" size={14} color={colors.white} />
-            <Text style={styles.endText}>Not Started</Text>
-          </View>
-        );
-      }
-      // No schedule: admin can launch manually
-      return (
-        <TouchableOpacity
-          style={styles.activateBtn}
-          onPress={() => handleToggleStatus(item, 'active')}>
-          <Icon name="play" size={14} color={colors.white} />
-          <Text style={styles.activateText}>Launch Election</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    return (
-      <TouchableOpacity
-        style={styles.endBtn}
-        onPress={() => handleToggleStatus(item, 'ended')}>
-        <Icon name="stop-circle" size={14} color={colors.white} />
-        <Text style={styles.endText}>Close Voting</Text>
-      </TouchableOpacity>
-    );
-  };
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date().toISOString();
+      elections.forEach(e => {
+        if (e.status === 'active' && e.endTime && now > e.endTime) {
+          adminService.updateElectionStatus(e.id, 'ended');
+          setElections(prev =>
+            prev.map(x => (x.id === e.id ? {...x, status: 'ended'} : x)),
+          );
+        }
+      });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [elections]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -464,127 +374,124 @@ export default function AdminElectionManagerScreen({navigation}: any) {
       ) : (
         <FlatList
           data={elections}
-          extraData={now}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({item}) => {
-            const live = getLiveStatus(item, now);
-            const countdown = getCountdownLabel(item, now);
-            const startFmt = formatDateTime(item.startTime);
-            const endFmt = formatDateTime(item.endTime);
-
-            return (
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.catBadge}>
-                    <Text style={styles.catBadgeText}>{item.category}</Text>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      live === 'active'
-                        ? styles.badgeActive
-                        : live === 'ended'
-                        ? styles.badgeEnded
-                        : styles.badgePending,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.statusText,
-                        live === 'active'
-                          ? styles.textActive
-                          : live === 'ended'
-                          ? styles.textEnded
-                          : styles.textPending,
-                      ]}>
-                      {live.toUpperCase()}
-                    </Text>
-                  </View>
+          renderItem={({item}) => (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={styles.catBadge}>
+                  <Text style={styles.catBadgeText}>{item.category}</Text>
                 </View>
 
-                <Text style={styles.electionTitle}>{item.title}</Text>
-                {item.description ? (
-                  <Text style={styles.electionDesc}>{item.description}</Text>
-                ) : null}
-
-                {startFmt || endFmt ? (
-                  <View style={styles.timeRow}>
-                    <Icon name="clock" size={14} color={colors.textSecondary} />
-                    <View style={styles.timeTextWrap}>
-                      <Text style={styles.timeText}>
-                        {startFmt
-                          ? `${startFmt.date} · ${startFmt.time}`
-                          : 'TBD'}
-                      </Text>
-                      <Text style={styles.timeText}>{' → '}</Text>
-                      <Text style={styles.timeText}>
-                        {endFmt ? `${endFmt.date} · ${endFmt.time}` : 'TBD'}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
-
-                {countdown ? (
+                <View
+                  style={[
+                    styles.statusBadge,
+                    item.status === 'active'
+                      ? styles.badgeActive
+                      : item.status === 'ended'
+                      ? styles.badgeEnded
+                      : styles.badgeDraft,
+                  ]}>
                   <Text
                     style={[
-                      styles.countdownText,
-                      live === 'pending'
-                        ? styles.textPending
-                        : styles.textActive,
+                      styles.statusText,
+                      item.status === 'active'
+                        ? styles.textActive
+                        : item.status === 'ended'
+                        ? styles.textEnded
+                        : styles.textDraft,
                     ]}>
-                    {countdown}
+                    {item.status.toUpperCase()}
                   </Text>
-                ) : null}
-
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <Icon
-                      name="check-square"
-                      size={14}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.statVal}>
-                      {item.totalVotes.toLocaleString()} Votes Cast
-                    </Text>
-                  </View>
-
-                  <View style={styles.statItem}>
-                    <Icon name="users" size={14} color={colors.textSecondary} />
-                    <Text style={styles.statVal}>
-                      {item.candidatesCount} Candidates
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Status Action Buttons */}
-                <View style={styles.btnRow}>
-                  {renderStatusAction(item, live)}
-
-                  <TouchableOpacity
-                    style={styles.candidatesBtn}
-                    onPress={() => openCandidates(item)}>
-                    <Icon name="user" size={14} color={colors.primary} />
-                    <Text style={styles.candidatesText}>Candidates</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.resultsBtn}
-                    onPress={() => openLiveResults(item)}>
-                    <Icon name="bar-chart-2" size={14} color={colors.white} />
-                    <Text style={styles.resultsText}>Live Results</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() => handleDeleteElection(item)}>
-                    <Icon name="trash-2" size={14} color={colors.white} />
-                    <Text style={styles.deleteText}>Delete</Text>
-                  </TouchableOpacity>
                 </View>
               </View>
-            );
-          }}
+
+              <Text style={styles.electionTitle}>{item.title}</Text>
+              {item.description ? (
+                <Text style={styles.electionDesc}>{item.description}</Text>
+              ) : null}
+
+              {item.startTime || item.endTime ? (
+                <View style={styles.timeRow}>
+                  <Icon name="clock" size={14} color={colors.textSecondary} />
+                  <View style={styles.timeTextWrap}>
+                    <Text style={styles.timeText}>
+                      {formatDateTime(item.startTime)?.date || 'TBD'}
+                      {' · '}
+                      {formatDateTime(item.startTime)?.time || ''}
+                    </Text>
+                    <Text style={styles.timeText}>{' → '}</Text>
+                    <Text style={styles.timeText}>
+                      {formatDateTime(item.endTime)?.date || 'TBD'}
+                      {' · '}
+                      {formatDateTime(item.endTime)?.time || ''}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Icon name="check-square" size={14} color={colors.primary} />
+                  <Text style={styles.statVal}>
+                    {item.totalVotes.toLocaleString()} Votes Cast
+                  </Text>
+                </View>
+
+                <View style={styles.statItem}>
+                  <Icon name="users" size={14} color={colors.textSecondary} />
+                  <Text style={styles.statVal}>
+                    {item.candidatesCount} Candidates
+                  </Text>
+                </View>
+              </View>
+
+              {/* Status Action Buttons */}
+              <View style={styles.btnRow}>
+                {isElectionEnded(item) ? (
+                  <TouchableOpacity style={styles.endBtn} disabled>
+                    <Icon name="stop-circle" size={14} color={colors.white} />
+                    <Text style={styles.endText}>Vote Closed</Text>
+                  </TouchableOpacity>
+                ) : item.status !== 'active' ? (
+                  <TouchableOpacity
+                    style={styles.activateBtn}
+                    onPress={() => handleToggleStatus(item, 'active')}>
+                    <Icon name="play" size={14} color={colors.white} />
+                    <Text style={styles.activateText}>Launch Election</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.endBtn}
+                    onPress={() => handleToggleStatus(item, 'ended')}>
+                    <Icon name="stop-circle" size={14} color={colors.white} />
+                    <Text style={styles.endText}>Close Voting</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.candidatesBtn}
+                  onPress={() => openCandidates(item)}>
+                  <Icon name="user" size={14} color={colors.primary} />
+                  <Text style={styles.candidatesText}>Candidates</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.resultsBtn}
+                  onPress={() => openLiveResults(item)}>
+                  <Icon name="bar-chart-2" size={14} color={colors.white} />
+                  <Text style={styles.resultsText}>Live Results</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => handleDeleteElection(item)}>
+                  <Icon name="trash-2" size={14} color={colors.white} />
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
               No election sessions currently scheduled.
@@ -614,38 +521,7 @@ export default function AdminElectionManagerScreen({navigation}: any) {
               data={candidates}
               keyExtractor={item => item.id}
               contentContainerStyle={styles.candidatesList}
-              renderItem={({item}) => (
-                <View style={styles.candidateCard}>
-                  {item.avatarUrl ? (
-                    <Image
-                      source={{uri: item.avatarUrl}}
-                      style={styles.candidateAvatar}
-                    />
-                  ) : (
-                    <View
-                      style={[styles.candidateAvatar, styles.avatarFallback]}>
-                      <Icon name="user" size={18} color={colors.textMuted} />
-                    </View>
-                  )}
-                  <View style={styles.flexOne}>
-                    <Text style={styles.candidateName}>{item.name}</Text>
-                    <Text style={styles.candidateMeta}>{item.position}</Text>
-                    {item.manifesto ? (
-                      <Text style={styles.candidateManifesto} numberOfLines={2}>
-                        {item.manifesto}
-                      </Text>
-                    ) : null}
-                    <Text style={styles.candidateVotes}>
-                      {item.voteCount} votes
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.removeCandidateBtn}
-                    onPress={() => handleDeleteCandidate(item)}>
-                    <Icon name="trash-2" size={16} color={colors.danger} />
-                  </TouchableOpacity>
-                </View>
-              )}
+              renderItem={renderCandidate}
               ListEmptyComponent={
                 <Text style={styles.emptyText}>
                   No candidates registered yet.
@@ -726,6 +602,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  flexOne: {
+    flex: 1,
+  },
+  loadingWrap: {
+    marginTop: 40,
   },
   header: {
     backgroundColor: colors.primary,
@@ -990,12 +872,6 @@ const styles = StyleSheet.create({
   formGroup: {
     gap: 6,
   },
-  formGroupFlex12: {
-    flex: 1.2,
-  },
-  formGroupFlex1: {
-    flex: 1,
-  },
   rowGroup: {
     flexDirection: 'row',
     gap: 10,
@@ -1083,10 +959,10 @@ const styles = StyleSheet.create({
     padding: spacing.xs,
   },
   addCandidateForm: {
+    gap: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: spacing.md,
-    gap: spacing.sm,
   },
   formHeading: {
     fontSize: 15,
