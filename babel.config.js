@@ -7,7 +7,7 @@ module.exports = {
         moduleName: '@env',
         path: '.env',
         blacklist: null,
-        whitelist: ['API_BASE_URL'],
+        whitelist: ['API_BASE_URL', 'APPS_SCRIPT_EMAIL_URL'],
         safe: false,
         allowUndefined: true,
       },
