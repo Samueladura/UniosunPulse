@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import Video from 'react-native-video';
+import Video, {Video as VideoType} from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
 import {useFocusEffect} from '@react-navigation/native';
 
@@ -19,7 +19,7 @@ interface Props {
 export default function PostMedia({image, video}: Props) {
   const [imageExpanded, setImageExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const videoRef = useRef<Video>(null);
+  const videoRef = useRef<VideoType>(null);
 
   // Pause video when screen loses focus (user navigates to another tab)
   useFocusEffect(

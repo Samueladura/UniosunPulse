@@ -35,37 +35,37 @@ import {uploadPostMedia} from '../services/media';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Marketplace'>;
 
-function getStyles(C: typeof colors) {
+function getStyles() {
   return StyleSheet.create({
-    safe: {flex: 1, backgroundColor: C.background},
+    safe: {flex: 1, backgroundColor: colors.background},
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      backgroundColor: C.card,
+      backgroundColor: colors.card,
       borderBottomWidth: 1,
-      borderBottomColor: C.border,
+      borderBottomColor: colors.border,
     },
-    headerTitle: {...typography.h3, color: C.textPrimary},
+    headerTitle: {...typography.h3, color: colors.textPrimary},
     headerSpacer: {width: 22},
     listContent: {padding: spacing.md, paddingBottom: spacing.xl},
     errorText: {
-      color: C.danger,
+      color: colors.danger,
       fontSize: 13,
       marginBottom: spacing.md,
     },
     emptyText: {
-      color: C.textSecondary,
+      color: colors.textSecondary,
       textAlign: 'center',
       marginTop: spacing.xl,
     },
     card: {
-      backgroundColor: C.card,
+      backgroundColor: colors.card,
       borderRadius: radius.md,
       borderWidth: 1,
-      borderColor: C.border,
+      borderColor: colors.border,
       padding: spacing.md,
       marginBottom: spacing.md,
     },
@@ -83,19 +83,19 @@ function getStyles(C: typeof colors) {
     categoryText: {
       fontSize: 10,
       fontWeight: '700',
-      color: C.textPrimary,
+      color: colors.textPrimary,
       textTransform: 'uppercase',
     },
     price: {
       fontSize: 17,
       fontWeight: '800',
-      color: C.primary,
+      color: colors.primary,
     },
-    title: {...typography.h3, color: C.textPrimary},
+    title: {...typography.h3, color: colors.textPrimary},
     subtitle: {
       marginTop: 6,
       fontSize: 14,
-      color: C.textSecondary,
+      color: colors.textSecondary,
       lineHeight: 20,
     },
     metaRow: {
@@ -104,10 +104,10 @@ function getStyles(C: typeof colors) {
       gap: 8,
       marginTop: spacing.sm,
     },
-    metaText: {fontSize: 13, color: C.textSecondary},
+    metaText: {fontSize: 13, color: colors.textSecondary},
     ctaButton: {
       marginTop: spacing.md,
-      backgroundColor: C.primary,
+      backgroundColor: colors.primary,
       alignSelf: 'flex-start',
       flexDirection: 'row',
       alignItems: 'center',
@@ -116,32 +116,36 @@ function getStyles(C: typeof colors) {
       paddingHorizontal: spacing.md,
       paddingVertical: 9,
     },
-    ctaText: {fontSize: 12, fontWeight: '700', color: C.white},
+    ctaText: {fontSize: 12, fontWeight: '700', color: colors.white},
     photoStrip: {marginBottom: spacing.md},
     listingPhoto: {
       width: 230,
       height: 165,
       marginRight: spacing.sm,
       borderRadius: radius.sm,
-      backgroundColor: C.background,
+      backgroundColor: colors.background,
     },
-    sellerActions: {flexDirection: 'row', gap: spacing.md, marginTop: spacing.md},
-    actionLink: {fontSize: 12, fontWeight: '700', color: C.primary},
-    removeLink: {color: C.danger},
+    sellerActions: {
+      flexDirection: 'row',
+      gap: spacing.md,
+      marginTop: spacing.md,
+    },
+    actionLink: {fontSize: 12, fontWeight: '700', color: colors.primary},
+    removeLink: {color: colors.danger},
     reportButton: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
       marginTop: spacing.md,
     },
-    reportText: {fontSize: 12, color: C.textSecondary},
+    reportText: {fontSize: 12, color: colors.textSecondary},
     modalBackdrop: {
       flex: 1,
       justifyContent: 'flex-end',
       backgroundColor: 'rgba(0,0,0,0.45)',
     },
     formCard: {
-      backgroundColor: C.card,
+      backgroundColor: colors.card,
       padding: spacing.md,
       borderTopLeftRadius: radius.lg,
       borderTopRightRadius: radius.lg,
@@ -153,18 +157,18 @@ function getStyles(C: typeof colors) {
       alignItems: 'center',
       marginBottom: spacing.xs,
     },
-    formTitle: {...typography.h3, color: C.textPrimary},
+    formTitle: {...typography.h3, color: colors.textPrimary},
     formInput: {
       borderWidth: 1,
-      borderColor: C.border,
+      borderColor: colors.border,
       borderRadius: radius.sm,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      color: C.textPrimary,
-      backgroundColor: C.background,
+      color: colors.textPrimary,
+      backgroundColor: colors.background,
     },
     formDescription: {minHeight: 78, textAlignVertical: 'top'},
-    imageLabel: {fontSize: 13, color: C.textPrimary, fontWeight: '700'},
+    imageLabel: {fontSize: 13, color: colors.textPrimary, fontWeight: '700'},
     photoPreviewWrap: {position: 'relative', marginRight: spacing.sm},
     photoPreview: {width: 76, height: 76, borderRadius: radius.sm},
     removePhoto: {
@@ -176,14 +180,14 @@ function getStyles(C: typeof colors) {
       borderRadius: 11,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: C.danger,
+      backgroundColor: colors.danger,
     },
     addPhoto: {
       width: 76,
       height: 76,
       borderRadius: radius.sm,
       borderWidth: 1,
-      borderColor: C.border,
+      borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
       gap: 4,
@@ -196,12 +200,12 @@ function getStyles(C: typeof colors) {
     },
     publishButton: {
       alignItems: 'center',
-      backgroundColor: C.primary,
+      backgroundColor: colors.primary,
       borderRadius: radius.pill,
       padding: spacing.md,
       marginTop: spacing.xs,
     },
-    publishText: {color: C.white, fontWeight: '700'},
+    publishText: {color: colors.white, fontWeight: '700'},
     disabledButton: {opacity: 0.55},
   });
 }
@@ -273,7 +277,7 @@ export default function MarketplaceScreen({navigation}: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      void loadListings();
+      loadListings();
     }, [loadListings]),
   );
 
@@ -416,7 +420,9 @@ export default function MarketplaceScreen({navigation}: Props) {
       selectionLimit: 5,
       quality: 0.8,
     });
-    if (response.didCancel) return;
+    if (response.didCancel) {
+      return;
+    }
     if (response.errorCode) {
       setError(response.errorMessage || 'Unable to open your photo library.');
       return;
@@ -704,7 +710,7 @@ export default function MarketplaceScreen({navigation}: Props) {
               <TouchableOpacity
                 style={styles.addPhoto}
                 disabled={existingImages.length + selectedImages.length >= 5}
-                onPress={() => void chooseListingImages()}>
+                onPress={() => chooseListingImages()}>
                 <Icon name="camera" size={20} color={colors.primary} />
                 <Text style={styles.actionLink}>Add photos</Text>
               </TouchableOpacity>
@@ -774,7 +780,7 @@ export default function MarketplaceScreen({navigation}: Props) {
             <TouchableOpacity
               style={[styles.publishButton, saving && styles.disabledButton]}
               disabled={saving}
-              onPress={() => void submitReport()}>
+              onPress={() => submitReport()}>
               <Text style={styles.publishText}>
                 {saving ? 'Submitting...' : 'Submit report'}
               </Text>

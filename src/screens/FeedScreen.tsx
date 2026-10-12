@@ -20,6 +20,8 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {
   backend,
   fetchComments,
+  reportPost,
+  reportComment,
 } from '../services/backend';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {
@@ -97,7 +99,7 @@ export default function FeedScreen({navigation}: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      void refreshFeed(filterTag);
+      refreshFeed(filterTag);
     }, [filterTag, refreshFeed]),
   );
 
@@ -153,6 +155,116 @@ export default function FeedScreen({navigation}: Props) {
 
   const sharePost = (post: PostWithMeta) => {
     Alert.alert('Share', `Share "${post.title}" with your network.`);
+  };
+
+  const handleReportPost = (post: PostWithMeta) => {
+    Alert.alert('Report Post', 'Why are you reporting this post?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Inappropriate Content',
+        onPress: () => submitReport(post.id, 'Inappropriate Content'),
+      },
+      {
+        text: 'Spam or Misleading',
+        onPress: () => submitReport(post.id, 'Spam or Misleading'),
+      },
+      {
+        text: 'Harassment or Hate Speech',
+        onPress: () => submitReport(post.id, 'Harassment or Hate Speech'),
+      },
+      {
+        text: 'Other',
+        onPress: () =>
+          Alert.prompt(
+            'Report Post',
+            'Please provide details:',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {
+                text: 'Submit',
+                onPress: (details?: string) =>
+                  submitReport(post.id, 'Other', details ?? ''),
+              },
+            ],
+            'plain-text',
+            '',
+          ),
+      },
+    ]);
+  };
+
+  const submitReport = async (
+    postId: string,
+    reason: string,
+    details?: string,
+  ) => {
+    try {
+      await reportPost(postId, reason, details);
+      Alert.alert(
+        'Report Submitted',
+        'Thank you for reporting. Our team will review it.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to submit report',
+      );
+    }
+  };
+
+  const handleReportComment = (commentId: string) => {
+    Alert.alert('Report Comment', 'Why are you reporting this comment?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Inappropriate Content',
+        onPress: () => submitCommentReport(commentId, 'Inappropriate Content'),
+      },
+      {
+        text: 'Spam',
+        onPress: () => submitCommentReport(commentId, 'Spam'),
+      },
+      {
+        text: 'Harassment',
+        onPress: () => submitCommentReport(commentId, 'Harassment'),
+      },
+      {
+        text: 'Other',
+        onPress: () =>
+          Alert.prompt(
+            'Report Comment',
+            'Please provide details:',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {
+                text: 'Submit',
+                onPress: (details?: string) =>
+                  submitCommentReport(commentId, 'Other', details ?? ''),
+              },
+            ],
+            'plain-text',
+            '',
+          ),
+      },
+    ]);
+  };
+
+  const submitCommentReport = async (
+    commentId: string,
+    reason: string,
+    details?: string,
+  ) => {
+    try {
+      await reportComment(commentId, reason, details);
+      Alert.alert(
+        'Report Submitted',
+        'Thank you for reporting. Our team will review it.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to submit report',
+      );
+    }
   };
 
   const activePost = posts.find(post => post.id === commentPostId) ?? null;
@@ -215,10 +327,10 @@ export default function FeedScreen({navigation}: Props) {
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={() => void refreshFeed(filterTag)}
+            onRefresh={() => refreshFeed(filterTag)}
           />
         }
-        onEndReached={() => void loadMorePosts()}
+        onEndReached={() => loadMorePosts()}
         onEndReachedThreshold={0.45}
         ListHeaderComponent={
           feedError ? <Text style={styles.feedError}>{feedError}</Text> : null
@@ -306,7 +418,7 @@ export default function FeedScreen({navigation}: Props) {
                 <TouchableOpacity
                   style={styles.footerAction}
                   onPress={() =>
-                    void toggleLike(item.id).catch(error =>
+                    toggleLike(item.id).catch(error =>
                       Alert.alert(
                         'Like could not be updated',
                         error instanceof Error
@@ -347,6 +459,11 @@ export default function FeedScreen({navigation}: Props) {
                 onPress={() => sharePost(item)}
                 activeOpacity={0.7}>
                 <Icon name="share-2" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleReportPost(item)}
+                activeOpacity={0.7}>
+                <Icon name="flag" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -420,6 +537,15 @@ export default function FeedScreen({navigation}: Props) {
                             />
                           </TouchableOpacity>
                         )}
+                        <TouchableOpacity
+                          onPress={() => handleReportComment(comment.id)}
+                          hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
+                          <Icon
+                            name="flag"
+                            size={14}
+                            color={colors.textSecondary}
+                          />
+                        </TouchableOpacity>
                       </View>
                       <Text style={styles.commentText}>{comment.body}</Text>
                     </View>

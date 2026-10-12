@@ -1,4 +1,6 @@
-require('dotenv').config();
+require('dotenv').config({
+  path: require('path').resolve(__dirname, '..', '.env'),
+});
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -53,11 +55,10 @@ const allowedTables = new Set([
   'blocked_users',
   'login_history',
   'student_verifications',
-  'reported_posts',
+  'reports',
   'campus_events',
   'event_rsvps',
   'marketplace_listings',
-  'reported_marketplace_listings',
   'saved_items',
   'career_opportunities',
   'opportunity_applications',
@@ -458,8 +459,7 @@ async function queryTable(table, payload, user) {
   const filters = [...(payload.filters || [])];
   const adminOnly = new Set([
     'student_verifications',
-    'reported_posts',
-    'reported_marketplace_listings',
+    'reports',
     'admin_audit_logs',
   ]);
   const managedContentTables = new Set([
@@ -688,8 +688,9 @@ async function queryTable(table, payload, user) {
     if (table === 'posts' && user.role !== 'admin') {
       record.author_id = user.id;
     }
-    if (table === 'reported_posts') {
+    if (table === 'reports' && ['insert', 'upsert'].includes(operation)) {
       record.reporter_id = user.id;
+      record.reporter_name = user.full_name || 'Student';
     }
     if (table === 'student_verifications' && user.role !== 'admin') {
       record.user_id = user.id;
@@ -1388,14 +1389,14 @@ app.post(
       return sendError(res, 400, 'You cannot report your own listing.');
     }
     const {rows} = await pool.query(
-      `INSERT INTO reported_marketplace_listings
-         (listing_id, reporter_id, reason, details)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (listing_id, reporter_id) DO NOTHING
+      `INSERT INTO reports (content_type, content_id, reporter_id, reporter_name, reason, details)
+       VALUES ('marketplace', $1, $2, $3, $4, $5)
+       ON CONFLICT DO NOTHING
        RETURNING id`,
       [
         req.params.listingId,
         req.user.id,
+        req.user.full_name || 'Student',
         input.data.reason,
         input.data.details,
       ],
@@ -1407,83 +1408,6 @@ app.post(
       data: {id: rows[0].id, reported: true},
       error: null,
     });
-  }),
-);
-
-app.get(
-  '/api/admin/marketplace-reports',
-  authenticate,
-  asyncRoute(async (req, res) => {
-    if (!requireAdmin(req, res)) {
-      return;
-    }
-    const {rows} = await pool.query(
-      `SELECT report.id, report.listing_id, report.reason, report.details,
-              report.status, report.created_at,
-              listing.title AS listing_title, listing.status AS listing_status,
-              reporter.full_name AS reporter_name, reporter.email AS reporter_email
-       FROM reported_marketplace_listings AS report
-       JOIN marketplace_listings AS listing ON listing.id = report.listing_id
-       JOIN users AS reporter ON reporter.id = report.reporter_id
-       ORDER BY CASE report.status WHEN 'pending' THEN 0 ELSE 1 END,
-                report.created_at DESC
-       LIMIT 200`,
-    );
-    return res.json({data: rows, error: null});
-  }),
-);
-
-app.patch(
-  '/api/admin/marketplace-reports/:reportId',
-  authenticate,
-  asyncRoute(async (req, res) => {
-    if (!requireAdmin(req, res)) {
-      return;
-    }
-    const input = z
-      .object({
-        status: z.enum(['actioned', 'dismissed']),
-        removeListing: z.boolean().default(false),
-      })
-      .safeParse(req.body);
-    if (!input.success) {
-      return sendError(res, 400, 'Choose a valid report action.');
-    }
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const {rows} = await client.query(
-        `UPDATE reported_marketplace_listings
-         SET status = $1, resolved_by = $2, resolved_at = now()
-         WHERE id = $3
-         RETURNING listing_id`,
-        [input.data.status, req.user.id, req.params.reportId],
-      );
-      if (!rows[0]) {
-        await client.query('ROLLBACK');
-        return sendError(res, 404, 'Marketplace report not found.');
-      }
-      if (input.data.removeListing) {
-        await client.query(
-          `UPDATE marketplace_listings SET status = 'removed', updated_at = now()
-           WHERE id = $1`,
-          [rows[0].listing_id],
-        );
-      }
-      await client.query('COMMIT');
-      return res.json({
-        data: {
-          status: input.data.status,
-          listing_removed: input.data.removeListing,
-        },
-        error: null,
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
   }),
 );
 
@@ -2738,6 +2662,206 @@ app.post(
       return res.json({data: rows[0].result, error: null});
     }
     return sendError(res, 404, `Unknown API operation "${name}".`);
+  }),
+);
+
+// Feedback endpoints
+app.post(
+  '/api/feedback',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    const input = z
+      .object({
+        message: z.string().trim().min(1).max(5000),
+      })
+      .safeParse(req.body);
+    if (!input.success) {
+      return sendError(res, 400, 'Feedback message is required.');
+    }
+    const {rows} = await pool.query(
+      `INSERT INTO feedback (user_id, user_name, user_email, message)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, user_id, user_name, user_email, message, status, created_at`,
+      [
+        req.user.id,
+        req.user.full_name || 'Unknown User',
+        req.user.email || 'No email',
+        input.data.message,
+      ],
+    );
+    return res.status(201).json({data: rows[0], error: null});
+  }),
+);
+
+app.get(
+  '/api/feedback',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    // Only admins can view feedback
+    if (req.user.role !== 'admin') {
+      return sendError(res, 403, 'Admin access required.');
+    }
+    const {rows} = await pool.query(
+      'SELECT * FROM feedback ORDER BY created_at DESC LIMIT 100',
+    );
+    return res.json({data: rows, error: null});
+  }),
+);
+
+app.patch(
+  '/api/feedback/:id',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return sendError(res, 403, 'Admin access required.');
+    }
+    const input = z
+      .object({
+        status: z.enum(['pending', 'reviewed', 'resolved']),
+      })
+      .safeParse(req.body);
+    if (!input.success) {
+      return sendError(res, 400, 'Valid status is required.');
+    }
+    const {rows} = await pool.query(
+      'UPDATE feedback SET status = $1 WHERE id = $2 RETURNING *',
+      [input.data.status, req.params.id],
+    );
+    if (rows.length === 0) {
+      return sendError(res, 404, 'Feedback not found.');
+    }
+    return res.json({data: rows[0], error: null});
+  }),
+);
+
+// Unified Reports API
+app.post(
+  '/api/reports',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    const input = z
+      .object({
+        content_type: z.enum(['post', 'comment', 'marketplace']),
+        content_id: z.string().uuid(),
+        reason: z.string().trim().min(1).max(100),
+        details: z.string().max(5000).optional(),
+      })
+      .safeParse(req.body);
+    if (!input.success) {
+      return sendError(
+        res,
+        400,
+        'Valid content_type, content_id, and reason are required.',
+      );
+    }
+
+    // Check content exists and user isn't reporting their own content
+    let contentTable, contentIdColumn, ownerIdColumn;
+    if (input.data.content_type === 'post') {
+      contentTable = 'posts';
+      contentIdColumn = 'id';
+      ownerIdColumn = 'author_id';
+    } else if (input.data.content_type === 'comment') {
+      contentTable = 'comments';
+      contentIdColumn = 'id';
+      ownerIdColumn = 'user_id';
+    } else {
+      contentTable = 'marketplace_listings';
+      contentIdColumn = 'id';
+      ownerIdColumn = 'seller_id';
+    }
+
+    const {rows: contentRows} = await pool.query(
+      `SELECT ${ownerIdColumn} FROM ${contentTable} WHERE ${contentIdColumn} = $1`,
+      [input.data.content_id],
+    );
+    if (!contentRows[0]) {
+      return sendError(res, 404, 'Content not found.');
+    }
+    if (contentRows[0][ownerIdColumn] === req.user.id) {
+      return sendError(res, 400, 'You cannot report your own content.');
+    }
+
+    const {rows} = await pool.query(
+      `INSERT INTO reports (content_type, content_id, reporter_id, reporter_name, reason, details)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT DO NOTHING
+       RETURNING id, content_type, content_id, reporter_id, reporter_name, reason, details, status, created_at`,
+      [
+        input.data.content_type,
+        input.data.content_id,
+        req.user.id,
+        req.user.full_name || 'Student',
+        input.data.reason,
+        input.data.details || null,
+      ],
+    );
+    if (!rows[0]) {
+      return sendError(res, 409, 'You have already reported this content.');
+    }
+    return res.status(201).json({data: rows[0], error: null});
+  }),
+);
+
+app.get(
+  '/api/reports',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return sendError(res, 403, 'Admin access required.');
+    }
+    const {content_type, status} = req.query;
+    let sql = `SELECT r.*, u.email as reporter_email
+               FROM reports r
+               JOIN users u ON u.id = r.reporter_id`;
+    const params = [];
+    const conditions = [];
+    if (content_type) {
+      params.push(content_type);
+      conditions.push(`r.content_type = $${params.length}`);
+    }
+    if (status) {
+      params.push(status);
+      conditions.push('r.status = $' + params.length);
+    }
+    if (conditions.length) {
+      sql += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    sql += 'ORDER BY r.created_at DESC LIMIT 100';
+    const {rows} = await pool.query(sql, params);
+    return res.json({data: rows, error: null});
+  }),
+);
+
+app.patch(
+  '/api/reports/:id',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return sendError(res, 403, 'Admin access required.');
+    }
+    const input = z
+      .object({
+        status: z.enum(['pending', 'actioned', 'dismissed']),
+        action_taken: z.string().max(500).optional(),
+      })
+      .safeParse(req.body);
+    if (!input.success) {
+      return sendError(res, 400, 'Valid status is required.');
+    }
+    const {rows} = await pool.query(
+      'UPDATE reports SET status = $1, action_taken = $2, resolved_by = $3, resolved_at = now() WHERE id = $4 RETURNING *',
+      [
+        input.data.status,
+        input.data.action_taken || null,
+        req.user.id,
+        req.params.id,
+      ],
+    );
+    if (rows.length === 0) {
+      return sendError(res, 404, 'Report not found.');
+    }
+    return res.json({data: rows[0], error: null});
   }),
 );
 

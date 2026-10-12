@@ -286,6 +286,22 @@ CREATE TABLE IF NOT EXISTS reported_marketplace_listings (
 CREATE INDEX IF NOT EXISTS idx_reported_marketplace_status
   ON reported_marketplace_listings (status, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS reported_comments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  comment_id text NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  reporter_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reporter_name text,
+  reason text NOT NULL,
+  details text,
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'actioned', 'dismissed')),
+  resolved_by text REFERENCES users(id) ON DELETE SET NULL,
+  resolved_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_reported_comments_status
+  ON reported_comments (status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS saved_items (
   user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   item_type text NOT NULL
@@ -455,6 +471,19 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at
   ON admin_audit_logs (created_at DESC);
+
+CREATE TABLE IF NOT EXISTS feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_name text,
+  user_email text,
+  message text NOT NULL,
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'reviewed', 'resolved')),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_created_at
+  ON feedback (created_at DESC);
 
 CREATE OR REPLACE FUNCTION cast_vote(
   p_election_id uuid,

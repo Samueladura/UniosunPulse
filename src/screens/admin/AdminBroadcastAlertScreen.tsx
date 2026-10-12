@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -29,8 +29,46 @@ export default function AdminBroadcastAlertScreen({navigation}: any) {
   const [body, setBody] = useState('');
   const [isEmergency, setIsEmergency] = useState(false);
   const [sending, setSending] = useState(false);
+  const [history, setHistory] = useState<
+    {
+      id: string;
+      title: string;
+      category: string;
+      time: string;
+      recipients: string;
+    }[]
+  >([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const {data} = await backend
+        .from('alerts')
+        .select('id, title, category, created_at')
+        .eq('is_broadcast', true)
+        .order('created_at', {ascending: false})
+        .limit(50);
+      if (data) {
+        setHistory(
+          data.map((alert: any) => ({
+            id: alert.id,
+            title: alert.title,
+            category: alert.category,
+            time: new Date(alert.created_at).toLocaleString(),
+            recipients: 'All Students',
+          })),
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
 
   useEffect(() => {
+    loadHistory();
+
     const channel = backend
       .channel('admin:broadcast_alerts')
       .on(
@@ -42,41 +80,25 @@ export default function AdminBroadcastAlertScreen({navigation}: any) {
         },
         payload => {
           const newAlert = payload.new as any;
-          setHistory(prev => [
-            {
-              id: newAlert.id,
-              title: newAlert.title,
-              category: newAlert.category,
-              time: 'Just now',
-              recipients: '14,850 Students',
-            },
-            ...prev,
-          ]);
+          if (newAlert.is_broadcast) {
+            setHistory(prev => [
+              {
+                id: newAlert.id,
+                title: newAlert.title,
+                category: newAlert.category,
+                time: 'Just now',
+                recipients: 'All Students',
+              },
+              ...prev,
+            ]);
+          }
         },
       )
       .subscribe();
     return () => {
       backend.removeChannel(channel);
     };
-  }, []);
-
-  // History log
-  const [history, setHistory] = useState([
-    {
-      id: '1',
-      title: 'Matriculation Security & Traffic Advisory',
-      category: 'Security Warning',
-      time: '2 hours ago',
-      recipients: '14,850 Students',
-    },
-    {
-      id: '2',
-      title: 'SUG Election Voting Hub Now Open',
-      category: 'SUG Event',
-      time: 'Yesterday',
-      recipients: '14,850 Students',
-    },
-  ]);
+  }, [loadHistory]);
 
   const handleSendBroadcast = async () => {
     if (!title.trim() || !body.trim()) {

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useCallback} from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -55,7 +55,7 @@ export default function AdminFeedbackScreen({navigation}: any) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return colors.warning;
+        return colors.interestBlue;
       case 'reviewed':
         return colors.interestBlue;
       case 'resolved':

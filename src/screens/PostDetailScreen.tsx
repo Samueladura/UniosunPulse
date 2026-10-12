@@ -24,6 +24,8 @@ import {
   deletePost as apiDeletePost,
   unfollowUser,
   followUser,
+  reportPost,
+  reportComment,
   type Post,
 } from '../services/backend';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -312,9 +314,6 @@ export default function PostDetailScreen({navigation, route}: Props) {
       : postParam?.avatar || '';
   const postTime = postParam?.time || new Date().toLocaleString();
   const postTag = postParam?.tag || 'ACADEMIC';
-  const postTitle =
-    postParam?.title ||
-    'New study materials for PSC 401 now available in the library folder';
   const postBody =
     postParam?.body ||
     "Hello everyone! I've just uploaded the consolidated study materials for the upcoming PSC 401 Mid-semester exams. These include comprehensive lecture notes from the past six weeks, curated research papers on modern political theories, and a set of practice questions to help you prepare.";
@@ -324,42 +323,45 @@ export default function PostDetailScreen({navigation, route}: Props) {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      if (postParam?.id) {
-        try {
-          const savedStatus = await fetchSavedStatus('post', postParam.id);
-          if (active) setSaved(savedStatus.saved);
-        } catch (error) {
-          if (active) {
-            Alert.alert(
-              'Unable to load saved status',
-              error instanceof Error ? error.message : 'Please try again.',
-            );
-          }
-        }
-        setIsLoadingPost(true);
-        const row = await fetchPostById(postParam.id);
-        if (active && row) {
-          setPostDetail(row);
-          setLikeCountValue(row.like_count);
-          const likedState = await hasUserLiked(row.id);
-          if (active) {
-            setLiked(likedState);
-          }
-        }
-        setIsLoadingPost(false);
-        const commentsRows = await fetchComments(postParam.id);
+      if (!postParam?.id) {
+        return;
+      }
+      try {
+        const savedStatus = await fetchSavedStatus('post', postParam.id);
         if (active) {
-          setCommentsList(
-            commentsRows.map(r => ({
-              id: r.id,
-              user_id: r.user_id,
-              name: r.author_name || 'Anonymous',
-              avatar: r.avatar || '',
-              time: new Date(r.created_at).toLocaleString(),
-              body: r.body,
-            })),
+          setSaved(savedStatus.saved);
+        }
+      } catch (error) {
+        if (active) {
+          Alert.alert(
+            'Unable to load saved status',
+            error instanceof Error ? error.message : 'Please try again.',
           );
         }
+      }
+      setIsLoadingPost(true);
+      const row = await fetchPostById(postParam.id);
+      if (active && row) {
+        setPostDetail(row);
+        setLikeCountValue(row.like_count);
+        const likedState = await hasUserLiked(row.id);
+        if (active) {
+          setLiked(likedState);
+        }
+      }
+      setIsLoadingPost(false);
+      const commentsRows = await fetchComments(postParam.id);
+      if (active) {
+        setCommentsList(
+          commentsRows.map(r => ({
+            id: r.id,
+            user_id: r.user_id,
+            name: r.author_name || 'Anonymous',
+            avatar: r.avatar || '',
+            time: new Date(r.created_at).toLocaleString(),
+            body: r.body,
+          })),
+        );
       }
     };
     (async () => {
@@ -400,7 +402,9 @@ export default function PostDetailScreen({navigation, route}: Props) {
   };
 
   const handleSaveToggle = async () => {
-    if (!postParam?.id || savingBookmark) return;
+    if (!postParam?.id || savingBookmark) {
+      return;
+    }
     setSavingBookmark(true);
     try {
       const result = await setItemSaved('post', postParam.id, !saved);
@@ -425,6 +429,119 @@ export default function PostDetailScreen({navigation, route}: Props) {
       await followUser(postParam.authorId);
     }
     setIsFollowingAuthor(prev => !prev);
+  };
+
+  const handleReportPost = () => {
+    if (!postParam?.id) {
+      return;
+    }
+    Alert.alert('Report Post', 'Why are you reporting this post?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Inappropriate Content',
+        onPress: () => submitReport(postParam.id, 'Inappropriate Content'),
+      },
+      {
+        text: 'Spam or Misleading',
+        onPress: () => submitReport(postParam.id, 'Spam or Misleading'),
+      },
+      {
+        text: 'Harassment or Hate Speech',
+        onPress: () => submitReport(postParam.id, 'Harassment or Hate Speech'),
+      },
+      {
+        text: 'Other',
+        onPress: () =>
+          Alert.prompt(
+            'Report Post',
+            'Please provide details:',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {
+                text: 'Submit',
+                onPress: (details?: string) =>
+                  submitReport(postParam.id, 'Other', details ?? ''),
+              },
+            ],
+            'plain-text',
+            '',
+          ),
+      },
+    ]);
+  };
+
+  const submitReport = async (
+    postId: string,
+    reason: string,
+    details?: string,
+  ) => {
+    try {
+      await reportPost(postId, reason, details);
+      Alert.alert(
+        'Report Submitted',
+        'Thank you for reporting. Our team will review it.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to submit report',
+      );
+    }
+  };
+
+  const handleReportComment = (commentId: string) => {
+    Alert.alert('Report Comment', 'Why are you reporting this comment?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Inappropriate Content',
+        onPress: () => submitCommentReport(commentId, 'Inappropriate Content'),
+      },
+      {
+        text: 'Spam',
+        onPress: () => submitCommentReport(commentId, 'Spam'),
+      },
+      {
+        text: 'Harassment',
+        onPress: () => submitCommentReport(commentId, 'Harassment'),
+      },
+      {
+        text: 'Other',
+        onPress: () =>
+          Alert.prompt(
+            'Report Comment',
+            'Please provide details:',
+            [
+              {text: 'Cancel', style: 'cancel'},
+              {
+                text: 'Submit',
+                onPress: (details?: string) =>
+                  submitCommentReport(commentId, 'Other', details ?? ''),
+              },
+            ],
+            'plain-text',
+            '',
+          ),
+      },
+    ]);
+  };
+
+  const submitCommentReport = async (
+    commentId: string,
+    reason: string,
+    details?: string,
+  ) => {
+    try {
+      await reportComment(commentId, reason, details);
+      Alert.alert(
+        'Report Submitted',
+        'Thank you for reporting. Our team will review it.',
+      );
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to submit report',
+      );
+    }
   };
 
   const handleAddComment = async () => {
@@ -619,6 +736,12 @@ export default function PostDetailScreen({navigation, route}: Props) {
               SAVE
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={handleReportPost}>
+            <Icon name="flag" size={18} color={C.text} />
+            <Text style={styles.actionLabel}>REPORT</Text>
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.commentsTitle}>
@@ -630,6 +753,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
             comment={comment}
             currentUserId={currentUserId}
             onDelete={handleDeleteComment}
+            onReport={handleReportComment}
           />
         ))}
       </ScrollView>
@@ -683,11 +807,13 @@ function CommentItem({
   isReply,
   currentUserId,
   onDelete,
+  onReport,
 }: {
   comment: Comment;
   isReply?: boolean;
   currentUserId?: string | null;
   onDelete?: (id: string) => void;
+  onReport?: (id: string) => void;
 }) {
   const C = usePrefs().isDark ? DARK_COLORS : LIGHT_COLORS;
   const styles = useThemedStyles(() => getStyles(C), []);
@@ -716,6 +842,13 @@ function CommentItem({
               <TouchableOpacity onPress={() => onDelete(comment.id)}>
                 <Icon name="trash-2" size={14} color={colors.danger} />
               </TouchableOpacity>
+            ) : onReport ? (
+              <>
+                <TouchableOpacity onPress={() => onReport(comment.id)}>
+                  <Icon name="flag" size={14} color={C.subtext} />
+                </TouchableOpacity>
+                <Text style={styles.commentTime}>{comment.time}</Text>
+              </>
             ) : (
               <Text style={styles.commentTime}>{comment.time}</Text>
             )}
@@ -727,13 +860,14 @@ function CommentItem({
             <Text style={styles.replyLink}>Reply</Text>
           </TouchableOpacity>
         )}
-        {comment.replies?.map(reply => (
+        {comment.replies?.map(_reply => (
           <CommentItem
-            key={reply.id}
-            comment={reply}
+            key={comment.id}
+            comment={comment}
             isReply
             currentUserId={currentUserId}
             onDelete={onDelete}
+            onReport={onReport}
           />
         ))}
       </View>

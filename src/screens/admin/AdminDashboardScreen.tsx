@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -31,15 +31,24 @@ export default function AdminDashboardScreen({navigation}: any) {
       createdAt: string;
     }[]
   >([]);
+  const [broadcastHistory, setBroadcastHistory] = useState<
+    {
+      id: string;
+      title: string;
+      category: string;
+      time: string;
+      recipients: string;
+    }[]
+  >([]);
 
-  const loadMetrics = async () => {
+  const loadMetrics = useCallback(async () => {
     setLoading(true);
     const data = await adminService.getDashboardMetrics();
     setMetrics(data);
     setLoading(false);
-  };
+  }, []);
 
-  const loadAuditLogs = async () => {
+  const loadAuditLogs = useCallback(async () => {
     const logs = await adminService.getAuditLogs();
     setAuditLogs(
       logs.map(log => ({
@@ -49,11 +58,36 @@ export default function AdminDashboardScreen({navigation}: any) {
         createdAt: log.createdAt,
       })),
     );
-  };
+  }, []);
+
+  const loadBroadcastHistory = useCallback(async () => {
+    try {
+      const {data} = await backend
+        .from('alerts')
+        .select('id, title, category, created_at')
+        .eq('is_broadcast', true)
+        .order('created_at', {ascending: false})
+        .limit(20);
+      if (data) {
+        setBroadcastHistory(
+          data.map((alert: any) => ({
+            id: alert.id,
+            title: alert.title,
+            category: alert.category,
+            time: new Date(alert.created_at).toLocaleString(),
+            recipients: 'All Students',
+          })),
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     loadMetrics();
     loadAuditLogs();
+    loadBroadcastHistory();
 
     const channel = backend
       .channel('admin:full_dashboard')
@@ -118,6 +152,7 @@ export default function AdminDashboardScreen({navigation}: any) {
         () => {
           loadMetrics();
           loadAuditLogs();
+          loadBroadcastHistory();
         },
       )
       .subscribe();
@@ -125,7 +160,7 @@ export default function AdminDashboardScreen({navigation}: any) {
     return () => {
       backend.removeChannel(channel);
     };
-  }, []);
+  }, [loadMetrics, loadAuditLogs, loadBroadcastHistory]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -260,21 +295,6 @@ export default function AdminDashboardScreen({navigation}: any) {
 
         <TouchableOpacity
           style={styles.actionCard}
-          onPress={() => navigation.navigate('AdminEvents')}>
-          <View style={[styles.actionIcon, styles.actionIconBlue]}>
-            <Icon name="calendar" size={24} color={colors.interestBlue} />
-          </View>
-          <View style={styles.flexOne}>
-            <Text style={styles.actionTitle}>Campus Event Management</Text>
-            <Text style={styles.actionDesc}>
-              Create and update events, control capacity, and manage RSVPs.
-            </Text>
-          </View>
-          <Icon name="chevron-right" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionCard}
           onPress={() => navigation.navigate('AdminMarketplaceReports')}>
           <View style={[styles.actionIcon, styles.actionIconRed]}>
             <Icon name="shopping-bag" size={24} color={colors.danger} />
@@ -348,6 +368,36 @@ export default function AdminDashboardScreen({navigation}: any) {
                 <Text style={styles.auditTime}>
                   {new Date(log.createdAt).toLocaleString()}
                 </Text>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* Broadcast History Preview */}
+        <Text style={styles.sectionTitle}>Recent Broadcast History</Text>
+        <View style={styles.auditBox}>
+          {broadcastHistory.length === 0 ? (
+            <Text style={styles.emptyAudit}>No broadcasts sent yet.</Text>
+          ) : (
+            broadcastHistory.slice(0, 5).map(item => (
+              <View style={styles.auditRow} key={item.id}>
+                <Icon
+                  name={
+                    item.category === 'EMERGENCY' ||
+                    item.category === 'Security Warning'
+                      ? 'shield-off'
+                      : 'bell'
+                  }
+                  size={16}
+                  color={
+                    item.category === 'EMERGENCY' ||
+                    item.category === 'Security Warning'
+                      ? colors.danger
+                      : colors.primary
+                  }
+                />
+                <Text style={styles.auditText}>{item.title}</Text>
+                <Text style={styles.auditTime}>{item.time}</Text>
               </View>
             ))
           )}

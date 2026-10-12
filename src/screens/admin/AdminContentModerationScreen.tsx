@@ -16,15 +16,31 @@ import Icon from 'react-native-vector-icons/Feather';
 import {colors, spacing, radius, typography} from '../../theme/colors';
 import {adminService, ReportedPost} from '../../services/adminService';
 import {usePosts} from '../../context/PostsContext';
-import {backend, fetchUserProfile} from '../../services/backend';
+import {backend, fetchUserProfile, reportComment as apiReportComment} from '../../services/backend';
 import {launchImageLibrary} from 'react-native-image-picker';
 import type {Asset} from 'react-native-image-picker';
 import {isVideoUrl, uploadPostMedia} from '../../services/media';
 
+interface ReportedComment {
+  id: string;
+  comment_id: string;
+  reporter_id: string;
+  reporter_name: string;
+  reason: string;
+  details: string | null;
+  status: 'pending' | 'actioned' | 'dismissed';
+  created_at: string;
+  comment_body?: string;
+  post_title?: string;
+}
+
 export default function AdminContentModerationScreen({navigation}: any) {
-  const [activeTab, setActiveTab] = useState<'reports' | 'announce'>('reports');
+  const [activeTab, setActiveTab] = useState<
+    'reports' | 'comments' | 'announce'
+  >('reports');
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<ReportedPost[]>([]);
+  const [reportedComments, setReportedComments] = useState<ReportedComment[]>([]);
 
   // Announcement Form state
   const [title, setTitle] = useState('');
@@ -44,6 +60,7 @@ export default function AdminContentModerationScreen({navigation}: any) {
 
   useEffect(() => {
     loadReports();
+    loadReportedComments();
     (async () => {
       const p = await fetchUserProfile();
       if (p) {
@@ -63,6 +80,17 @@ export default function AdminContentModerationScreen({navigation}: any) {
           loadReports();
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'reported_comments',
+        },
+        () => {
+          loadReportedComments();
+        },
+      )
       .subscribe();
     return () => {
       backend.removeChannel(channel);
@@ -74,6 +102,36 @@ export default function AdminContentModerationScreen({navigation}: any) {
     const data = await adminService.getReportedPosts();
     setReports(data);
     setLoading(false);
+  };
+
+  const loadReportedComments = async () => {
+    try {
+      const {data} = await backend
+        .from('reported_comments')
+        .select(
+          `id, comment_id, reporter_id, reporter_name, reason, details, status, created_at, comment:comments(body, post_id)`,
+        )
+        .order('created_at', {ascending: false})
+        .limit(50);
+      if (data) {
+        setReportedComments(
+          data.map((item: any) => ({
+            id: item.id,
+            comment_id: item.comment_id,
+            reporter_id: item.reporter_id,
+            reporter_name: item.reporter_name,
+            reason: item.reason,
+            details: item.details,
+            status: item.status,
+            created_at: item.created_at,
+            comment_body: item.comment?.body,
+            post_title: item.comment?.post_id,
+          })),
+        );
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const handleDismiss = async (report: ReportedPost) => {
@@ -98,6 +156,47 @@ export default function AdminContentModerationScreen({navigation}: any) {
               'Post Deleted',
               'The reported post has been removed from the campus feed.',
             );
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDismissComment = async (report: ReportedComment) => {
+    try {
+      await backend
+        .from('reported_comments')
+        .update({status: 'dismissed', resolved_at: new Date().toISOString()})
+        .eq('id', report.id);
+      setReportedComments(prev => prev.filter(r => r.id !== report.id));
+      Alert.alert('Report Dismissed', 'No moderation action taken.');
+    } catch {
+      Alert.alert('Error', 'Failed to dismiss comment report');
+    }
+  };
+
+  const handleDeleteComment = async (report: ReportedComment) => {
+    Alert.alert(
+      'Delete Comment',
+      `Delete reported comment?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Delete Comment',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await backend
+                .from('reported_comments')
+                .update({status: 'actioned', resolved_at: new Date().toISOString()})
+                .eq('id', report.id);
+              // Also delete the actual comment
+              await backend.from('comments').delete().eq('id', report.comment_id);
+              setReportedComments(prev => prev.filter(r => r.id !== report.id));
+              Alert.alert('Comment Deleted', 'The reported comment has been removed.');
+            } catch {
+              Alert.alert('Error', 'Failed to delete comment');
+            }
           },
         },
       ],
@@ -199,7 +298,24 @@ export default function AdminContentModerationScreen({navigation}: any) {
               styles.tabText,
               activeTab === 'reports' && styles.activeTabText,
             ]}>
-            Reported Queue ({reports.length})
+            Reported Posts ({reports.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'comments' && styles.activeTab]}
+          onPress={() => setActiveTab('comments')}>
+          <Icon
+            name="message-square"
+            size={16}
+            color={activeTab === 'comments' ? colors.primary : colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'comments' && styles.activeTabText,
+            ]}>
+            Reported Comments ({reportedComments.length})
           </Text>
         </TouchableOpacity>
 
@@ -276,6 +392,68 @@ export default function AdminContentModerationScreen({navigation}: any) {
             ListEmptyComponent={
               <Text style={styles.emptyText}>
                 No pending content reports to review.
+              </Text>
+            }
+          />
+        )
+      ) : activeTab === 'comments' ? (
+        loading ? (
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={styles.loadingWrap}
+          />
+        ) : (
+          <FlatList
+            data={reportedComments}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({item}) => (
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.flagWrap}>
+                    <Icon name="alert-circle" size={16} color={colors.danger} />
+                    <Text style={styles.reasonText}>{item.reason}</Text>
+                  </View>
+                  <Text style={styles.statusTag}>{item.status}</Text>
+                </View>
+
+                <View style={styles.postBox}>
+                  <Text style={styles.postTitle}>
+                    Comment on: {item.post_title || 'Post'}
+                  </Text>
+                  <Text style={styles.postAuthor}>
+                    Reported by: {item.reporter_name}
+                  </Text>
+                  <Text style={styles.reportDetails}>
+                    "{item.comment_body || 'Comment body unavailable'}"
+                  </Text>
+                  {item.details && (
+                    <Text style={styles.reportDetails}>
+                      Reporter Note: "{item.details}"
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.btnRow}>
+                  <TouchableOpacity
+                    style={styles.dismissBtn}
+                    onPress={() => handleDismissComment(item)}>
+                    <Text style={styles.dismissText}>Dismiss Report</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => handleDeleteComment(item)}>
+                    <Icon name="trash-2" size={14} color={colors.white} />
+                    <Text style={styles.deleteText}>Delete Comment</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>
+                No pending comment reports to review.
               </Text>
             }
           />

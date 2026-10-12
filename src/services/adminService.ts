@@ -1,5 +1,5 @@
 import {backend, fetchUserProfile} from './backend';
-import {apiFetch} from './api';
+import {apiFetch, apiGet} from './api';
 
 type DataRow = Record<string, any>;
 
@@ -198,16 +198,16 @@ export const adminService = {
   // 3. Content Moderation
   async getReportedPosts(): Promise<ReportedPost[]> {
     try {
-      const {data, error} = await backend
-        .from('reported_posts')
-        .select('*')
-        .order('created_at', {ascending: false});
+      const response = await apiGet<{
+        data: any[];
+        error?: {message?: string} | null;
+      }>('/reported-posts');
 
-      if (error || !data || data.length === 0) {
+      if (response.error || !response.data || response.data.length === 0) {
         return [];
       }
 
-      return data.map((item: DataRow) => ({
+      return response.data.map((item: any) => ({
         id: item.id,
         postId: item.post_id,
         reporterId: item.reporter_id,
@@ -216,6 +216,8 @@ export const adminService = {
         details: item.details,
         status: item.status,
         createdAt: item.created_at,
+        postTitle: item.post_title,
+        postAuthor: item.post_author,
       }));
     } catch {
       return [];
@@ -227,13 +229,17 @@ export const adminService = {
     action: 'actioned' | 'dismissed',
   ): Promise<boolean> {
     try {
-      await backend
-        .from('reported_posts')
-        .update({
-          status: action,
-          resolved_at: new Date().toISOString(),
-        })
-        .eq('id', reportId);
+      const response = await apiFetch<{
+        data: any;
+        error?: {message?: string} | null;
+      }>(`/reported-posts/${encodeURIComponent(reportId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({status: action}),
+      });
+
+      if (response.error) {
+        return false;
+      }
       return true;
     } catch {
       return false;

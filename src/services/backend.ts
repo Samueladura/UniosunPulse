@@ -17,7 +17,6 @@ import {
   signOutUser,
   rpcCall,
   dbQuery,
-  sendEmailViaAppsScript,
 } from './api';
 import {apiFetch, apiGet} from './api';
 
@@ -1173,6 +1172,45 @@ export async function deleteComment(
 }
 
 // ---------------------------------------------------------------------------
+// Reports (Posts & Comments) - via API
+// ---------------------------------------------------------------------------
+export async function reportPost(
+  postId: string,
+  reason: string,
+  details?: string,
+): Promise<void> {
+  const response = await apiFetch<{
+    data: any;
+    error?: {message?: string} | null;
+  }>('/reported-posts', {
+    method: 'POST',
+    body: JSON.stringify({post_id: postId, reason, details}),
+  });
+
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to report post');
+  }
+}
+
+export async function reportComment(
+  commentId: string,
+  reason: string,
+  details?: string,
+): Promise<void> {
+  const response = await apiFetch<{
+    data: any;
+    error?: {message?: string} | null;
+  }>('/reported-comments', {
+    method: 'POST',
+    body: JSON.stringify({comment_id: commentId, reason, details}),
+  });
+
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to report comment');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Follows
 // ---------------------------------------------------------------------------
 export async function followUser(followingId: string): Promise<void> {
@@ -1182,7 +1220,7 @@ export async function followUser(followingId: string): Promise<void> {
   if (!user) {
     return;
   }
-  
+
   // Prevent users from following themselves
   if (user.id === followingId) {
     throw new Error('You cannot follow yourself');
@@ -1672,68 +1710,46 @@ export interface Feedback {
 }
 
 export async function submitFeedback(message: string): Promise<void> {
-  const {
-    data: {user},
-  } = await backend.auth.getUser();
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-
-  const userName = user.user_metadata?.full_name ?? 'Unknown User';
-  const userEmail = user.email ?? 'No email';
-
-  const {error} = await backend.from('feedback').insert({
-    user_id: user.id,
-    user_name: userName,
-    user_email: userEmail,
-    message,
-    status: 'pending',
+  const response = await apiFetch<{
+    data: Feedback;
+    error?: {message?: string} | null;
+  }>('/feedback', {
+    method: 'POST',
+    body: JSON.stringify({message}),
   });
 
-  if (error) {
-    throw new Error(error.message);
+  if (response.error) {
+    throw new Error(response.error.message || 'Failed to submit feedback');
   }
-
-  // Send email notification to admin
-  const adminEmail = 'official.uniosun@edu.ng';
-  await sendEmailViaAppsScript({
-    to: adminEmail,
-    subject: `New Feedback from ${userName}`,
-    body: `New feedback received from ${userName} (${userEmail}):\n\n${message}`,
-    html: `
-      <h2>New Feedback Received</h2>
-      <p><strong>From:</strong> ${userName} (${userEmail})</p>
-      <p><strong>Message:</strong></p>
-      <p>${message.replace(/\n/g, '<br>')}</p>
-      <hr>
-      <p><small>Sent from UniOsun Pulse App</small></p>
-    `,
-  });
 }
 
 export async function fetchFeedback(): Promise<Feedback[]> {
-  const {data, error} = await backend
-    .from('feedback')
-    .select('*')
-    .order('created_at', {ascending: false})
-    .limit(100);
+  const response = await apiGet<{
+    data: Feedback[];
+    error?: {message?: string} | null;
+  }>('/feedback');
 
-  if (error || !data) {
+  if (response.error || !response.data) {
     return [];
   }
-  return data as Feedback[];
+  return response.data;
 }
 
 export async function updateFeedbackStatus(
   feedbackId: string,
   status: 'pending' | 'reviewed' | 'resolved',
 ): Promise<void> {
-  const {error} = await backend
-    .from('feedback')
-    .update({status})
-    .eq('id', feedbackId);
+  const response = await apiFetch<{
+    data: Feedback;
+    error?: {message?: string} | null;
+  }>(`/feedback/${encodeURIComponent(feedbackId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({status}),
+  });
 
-  if (error) {
-    throw new Error(error.message);
+  if (response.error) {
+    throw new Error(
+      response.error.message || 'Failed to update feedback status',
+    );
   }
 }
