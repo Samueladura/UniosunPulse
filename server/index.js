@@ -3070,4 +3070,5 @@ start().catch(error => {
   console.error('Unable to start API:', error.message);
   process.exitCode = 1;
   pool.end();
-});
+}
+);
