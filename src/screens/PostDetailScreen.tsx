@@ -627,7 +627,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
           <View style={styles.flexOne}>
             <Text style={styles.authorName}>{authorName}</Text>
             <Text style={styles.authorMeta}>
-              Political Science • {postTime}
+              {postParam?.department || 'Student'} • {postTime}
             </Text>
           </View>
           <TouchableOpacity

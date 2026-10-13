@@ -526,13 +526,13 @@ export default function AdminContentModerationScreen({navigation}: any) {
 
           <View style={styles.mediaPickers}>
             <TouchableOpacity
-              style={styles.pickImageBtn}
+              style={styles.pickImageBtnImage}
               onPress={() => handlePickMedia('photo')}>
               <Icon name="image" size={18} color={colors.white} />
               <Text style={styles.pickImageText}>Pick Image</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.pickImageBtn}
+              style={styles.pickImageBtnVideo}
               onPress={() => handlePickMedia('video')}>
               <Icon name="video" size={18} color={colors.white} />
               <Text style={styles.pickImageText}>Pick Video</Text>
@@ -791,12 +791,17 @@ const styles = StyleSheet.create({
   pickImageBtn: {
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.interestBlue,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     marginTop: 6,
+  },
+  pickImageBtnImage: {
+    backgroundColor: colors.primary,
+  },
+  pickImageBtnVideo: {
+    backgroundColor: colors.interestBlue,
   },
   mediaPickers: {flexDirection: 'row', gap: spacing.sm},
   mediaPreview: {marginTop: spacing.sm},

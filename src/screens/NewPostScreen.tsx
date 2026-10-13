@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -19,10 +20,12 @@ import type {RootStackParamList} from '../navigation/AppNavigator';
 import {launchImageLibrary} from 'react-native-image-picker';
 import type {Asset} from 'react-native-image-picker';
 import {uploadPostMedia} from '../services/media';
+import {usePrefs, useThemedStyles} from '../theme/PreferencesContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NewPost'>;
 
 export default function NewPostScreen({}: Props) {
+  const {isDark} = usePrefs();
   const [text, setText] = useState('');
   const [category, setCategory] = useState('Announcements');
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -98,6 +101,14 @@ export default function NewPostScreen({}: Props) {
     } else if (asset?.uri) {
       setMediaAsset(asset);
     }
+  };
+
+  const handlePoll = () => {
+    Alert.alert('Polls', 'Poll creation coming soon!');
+  };
+
+  const handleLink = () => {
+    Alert.alert('Add Link', 'Link attachment coming soon!');
   };
 
   return (
@@ -226,10 +237,10 @@ export default function NewPostScreen({}: Props) {
             onPress={() => handlePickMedia('video')}>
             <Icon name="video" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.toolIcon}>
+          <TouchableOpacity style={styles.toolIcon} onPress={handlePoll}>
             <Icon name="bar-chart-2" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.toolIcon}>
+          <TouchableOpacity style={styles.toolIcon} onPress={handleLink}>
             <Icon name="link" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -239,135 +250,137 @@ export default function NewPostScreen({}: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {flex: 1, backgroundColor: colors.background},
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerLeft: {flexDirection: 'row', alignItems: 'center', gap: 4},
-  cancelText: {fontSize: 15, fontWeight: '600', color: colors.textPrimary},
-  headerTitle: {fontSize: 17, fontWeight: '800', color: colors.primary},
-  postBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-  },
-  postBtnDisabled: {backgroundColor: colors.accent, opacity: 0.6},
-  postBtnText: {color: colors.white, fontWeight: '700', fontSize: 14},
-  errorBanner: {
-    backgroundColor: colors.danger,
-    padding: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  errorText: {color: colors.white, fontSize: 13, fontWeight: '600'},
-  content: {flex: 1, padding: spacing.md},
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  avatar: {width: 48, height: 48, borderRadius: 24},
-  avatarFallback: {backgroundColor: colors.border},
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: colors.white,
-    borderRadius: 10,
-  },
-  userName: {fontSize: 16, fontWeight: '700', color: colors.textPrimary},
-  userMeta: {fontSize: 13, color: colors.textSecondary},
-  textArea: {
-    fontSize: 17,
-    color: colors.textPrimary,
-    minHeight: 160,
-    textAlignVertical: 'top',
-  },
-  spacer: {flex: 1},
-  sectionLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  imagePreviewWrap: {
-    position: 'relative',
-    marginBottom: spacing.md,
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: radius.md,
-    backgroundColor: '#111111',
-  },
-  videoPreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: radius.md,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  videoPreviewName: {
-    maxWidth: '90%',
-    color: colors.white,
-    fontSize: 13,
-  },
-  removeImageBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: colors.danger,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  categoryChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  categoryChipText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  categoryChipTextActive: {color: colors.white},
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  toolbarLeft: {flexDirection: 'row', gap: spacing.lg},
-  toolIcon: {padding: 4},
-  charCount: {fontSize: 13, color: colors.textMuted},
-});
+const styles = useThemedStyles(() =>
+    StyleSheet.create({
+      safe: {flex: 1, backgroundColor: colors.background},
+      header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        backgroundColor: colors.card,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      },
+      headerLeft: {flexDirection: 'row', alignItems: 'center', gap: 4},
+      cancelText: {fontSize: 15, fontWeight: '600', color: colors.textPrimary},
+      headerTitle: {fontSize: 17, fontWeight: '800', color: colors.primary},
+      postBtn: {
+        backgroundColor: colors.primary,
+        paddingHorizontal: spacing.md,
+        paddingVertical: 8,
+        borderRadius: radius.pill,
+      },
+      postBtnDisabled: {backgroundColor: colors.accent, opacity: 0.6},
+      postBtnText: {color: colors.white, fontWeight: '700', fontSize: 14},
+      errorBanner: {
+        backgroundColor: colors.danger,
+        padding: spacing.sm,
+        paddingHorizontal: spacing.md,
+      },
+      errorText: {color: colors.white, fontSize: 13, fontWeight: '600'},
+      content: {flex: 1, padding: spacing.md},
+      userRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        marginBottom: spacing.md,
+      },
+      avatar: {width: 48, height: 48, borderRadius: 24},
+      avatarFallback: {backgroundColor: colors.border},
+      verifiedBadge: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        backgroundColor: colors.white,
+        borderRadius: 10,
+      },
+      userName: {fontSize: 16, fontWeight: '700', color: colors.textPrimary},
+      userMeta: {fontSize: 13, color: colors.textSecondary},
+      textArea: {
+        fontSize: 17,
+        color: colors.textPrimary,
+        minHeight: 160,
+        textAlignVertical: 'top',
+      },
+      spacer: {flex: 1},
+      sectionLabel: {
+        ...typography.label,
+        color: colors.textSecondary,
+        marginBottom: spacing.sm,
+      },
+      categoryRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.sm,
+        marginBottom: spacing.md,
+      },
+      imagePreviewWrap: {
+        position: 'relative',
+        marginBottom: spacing.md,
+      },
+      imagePreview: {
+        width: '100%',
+        height: 200,
+        borderRadius: radius.md,
+        backgroundColor: isDark ? '#1A1A1A' : '#111111',
+      },
+      videoPreview: {
+        width: '100%',
+        height: 200,
+        borderRadius: radius.md,
+        backgroundColor: colors.textPrimary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.sm,
+      },
+      videoPreviewName: {
+        maxWidth: '90%',
+        color: colors.white,
+        fontSize: 13,
+      },
+      removeImageBtn: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        backgroundColor: colors.danger,
+        borderRadius: 12,
+        width: 24,
+        height: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      categoryChip: {
+        paddingHorizontal: spacing.md,
+        paddingVertical: 8,
+        borderRadius: radius.pill,
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+      },
+      categoryChipActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+      },
+      categoryChipText: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        fontWeight: '600',
+      },
+      categoryChipTextActive: {color: colors.white},
+      toolbar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+        backgroundColor: colors.card,
+      },
+      toolbarLeft: {flexDirection: 'row', gap: spacing.lg},
+      toolIcon: {padding: 4},
+      charCount: {fontSize: 13, color: colors.textMuted},
+    }),
+  );

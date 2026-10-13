@@ -139,6 +139,80 @@ function getEmailTransport() {
   });
 }
 
+const APP_NAME = 'UniOsun Pulse';
+const CODE_EXPIRY_MINUTES = 10;
+
+// Builds the plain-text and HTML bodies for emails that carry a one-time code.
+function buildCodeEmail({heading, intro, code, ignoreNote}) {
+  const text = `Hello,
+
+${intro}
+
+Your verification code is: ${code}
+
+This code expires in ${CODE_EXPIRY_MINUTES} minutes. Please do not share it with anyone.
+
+${ignoreNote}
+
+Regards,
+The ${APP_NAME} Team`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${heading}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f3f4f6;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6; padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#ffffff; border-radius:12px; overflow:hidden; font-family:Arial, Helvetica, sans-serif;">
+          <tr>
+            <td style="background-color:#2563eb; padding:20px 24px; color:#ffffff; font-size:18px; font-weight:bold; letter-spacing:0.3px;">
+              ${APP_NAME}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 24px 8px; color:#1f2937;">
+              <h1 style="margin:0 0 16px; font-size:22px; color:#111827;">${heading}</h1>
+              <p style="margin:0 0 8px; font-size:15px; line-height:1.6;">Hello,</p>
+              <p style="margin:0; font-size:15px; line-height:1.6;">${intro}</p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:16px 24px;">
+              <div style="display:inline-block; padding:16px 28px; background-color:#eff6ff; border:1px dashed #93c5fd; border-radius:10px; font-size:34px; font-weight:bold; letter-spacing:8px; color:#1d4ed8; font-family:'Courier New', monospace;">
+                ${code}
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 24px 24px; color:#1f2937;">
+              <p style="margin:0 0 16px; font-size:14px; line-height:1.6;">
+                This code expires in <strong>${CODE_EXPIRY_MINUTES} minutes</strong>.
+                For your security, never share it with anyone.
+              </p>
+              <p style="margin:0; font-size:13px; line-height:1.6; color:#6b7280;">${ignoreNote}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 24px; background-color:#f9fafb; border-top:1px solid #e5e7eb; font-size:12px; color:#9ca3af; line-height:1.5;">
+              Regards,<br />The ${APP_NAME} Team<br />
+              This is an automated message, please do not reply.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return {text, html};
+}
+
 async function createMfaChallenge(client, userId, factorId, purpose) {
   const challenge = crypto.randomBytes(32).toString('base64url');
   await client.query(
@@ -1411,6 +1485,90 @@ app.post(
   }),
 );
 
+// Admin: Get marketplace reports
+app.get(
+  '/api/admin/marketplace-reports',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return sendError(res, 403, 'Admin access required.');
+    }
+    const {rows} = await pool.query(
+      `SELECT r.id, r.content_id AS listing_id, r.reason, r.details, r.status, r.created_at,
+              r.reporter_id, r.reporter_name,
+              u.email AS reporter_email,
+              l.title AS listing_title,
+              l.status AS listing_status
+       FROM reports r
+       JOIN users u ON u.id = r.reporter_id
+       LEFT JOIN marketplace_listings l ON l.id = r.content_id
+       WHERE r.content_type = 'marketplace'
+       ORDER BY r.created_at DESC
+       LIMIT 100`,
+    );
+    return res.json({data: rows, error: null});
+  }),
+);
+
+// Admin: Review marketplace report
+app.patch(
+  '/api/admin/marketplace-reports/:id',
+  authenticate,
+  asyncRoute(async (req, res) => {
+    if (req.user.role !== 'admin') {
+      return sendError(res, 403, 'Admin access required.');
+    }
+    const input = z
+      .object({
+        status: z.enum(['actioned', 'dismissed']),
+        removeListing: z.boolean().optional(),
+      })
+      .safeParse(req.body);
+    if (!input.success) {
+      return sendError(res, 400, 'Valid status is required.');
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const {rows: reportRows} = await client.query(
+        'SELECT content_id FROM reports WHERE id = $1 FOR UPDATE',
+        [req.params.id],
+      );
+      const report = reportRows[0];
+      if (!report) {
+        await client.query('ROLLBACK');
+        return sendError(res, 404, 'Report not found.');
+      }
+      await client.query(
+        'UPDATE reports SET status = $1, resolved_by = $2, resolved_at = now() WHERE id = $3',
+        [input.data.status, req.user.id, req.params.id],
+      );
+      let listingStatus = 'active';
+      if (input.data.removeListing) {
+        await client.query(
+          "UPDATE marketplace_listings SET status = 'removed' WHERE id = $1",
+          [report.content_id],
+        );
+        listingStatus = 'removed';
+      }
+      await client.query('COMMIT');
+      return res.json({
+        data: {
+          status: input.data.status,
+          listing_removed: input.data.removeListing ?? false,
+          listing_status: listingStatus,
+        },
+        error: null,
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }),
+);
+
 app.get(
   '/api/auth/session',
   asyncRoute(async (req, res) => {
@@ -1663,8 +1821,15 @@ app.post(
       await transport.sendMail({
         from: process.env.SMTP_FROM,
         to: user.email,
-        subject: 'Reset your UniOsun Pulse password',
-        text: `Your password reset code is ${code}. It expires in 10 minutes.`,
+        subject: `Reset your ${APP_NAME} password`,
+        ...buildCodeEmail({
+          heading: 'Reset your password',
+          intro:
+            'We received a request to reset the password for your account. Use the code below to continue.',
+          code,
+          ignoreNote:
+            "If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.",
+        }),
       });
     }
     return res.json({
@@ -1909,8 +2074,14 @@ app.post(
     await transport.sendMail({
       from: process.env.SMTP_FROM,
       to: email,
-      subject: 'Verify your UniOsun Pulse account',
-      text: `Your verification code is ${code}. It expires in 10 minutes.`,
+      subject: `Verify your ${APP_NAME} account`,
+      ...buildCodeEmail({
+        heading: 'Welcome aboard',
+        intro: `Thanks for signing up for ${APP_NAME}. Use the code below to verify your email and activate your account.`,
+        code,
+        ignoreNote:
+          "If you didn't create an account, you can safely ignore this email.",
+      }),
     });
     return res.json({data: {user: {email}}, error: null});
   }),
@@ -1951,8 +2122,14 @@ app.post(
     await transport.sendMail({
       from: process.env.SMTP_FROM,
       to: email,
-      subject: 'Your UniOsun Pulse verification code',
-      text: `Your verification code is ${code}. It expires in 10 minutes.`,
+      subject: `Your ${APP_NAME} verification code`,
+      ...buildCodeEmail({
+        heading: 'Verify your email',
+        intro: `Thank you for choosing ${APP_NAME}. Use the code below to complete your verification.`,
+        code,
+        ignoreNote:
+          "If you didn't request this code, you can safely ignore this email.",
+      }),
     });
     return res.json({data: {user: {email}}, error: null});
   }),

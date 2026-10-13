@@ -83,16 +83,29 @@ export const adminService = {
         .from('elections')
         .select('id, status');
 
+      // Get total students from profiles table
       let totalStudents = 0;
       try {
-        const {count} = await backend
+        const {count, error: countError} = await backend
           .from('profiles')
           .select('*', {count: 'exact', head: true});
-        if (count && count > 0) {
+        if (countError) {
+          console.warn('Failed to get total students count:', countError);
+        } else if (count && count > 0) {
           totalStudents = count;
         }
-      } catch {
-        // profiles table may not exist
+      } catch (profileError) {
+        console.warn('Profiles table query failed:', profileError);
+        // Try alternative: count from users table via auth
+        try {
+          const {count} = await backend.rpc('get_total_users');
+          if (count && count > 0) {
+            totalStudents = count;
+          }
+        } catch {
+          // Fallback to counting verifications + approved as approximation
+          totalStudents = verifications?.filter((v: any) => v.status === 'approved').length || 0;
+        }
       }
 
       const pendingV = verifications

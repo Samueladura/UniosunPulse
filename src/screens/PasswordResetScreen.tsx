@@ -111,11 +111,17 @@ export default function PasswordResetScreen({navigation}: Props) {
       setEmail(normalizedEmail);
       setSent(true);
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to request a reset code.',
-      );
+      const errorMessage = requestError instanceof Error ? requestError.message : 'Unable to request a reset code.';
+      // Provide more helpful error messages
+      if (errorMessage.includes('503') || errorMessage.includes('email delivery is not configured')) {
+        setError('Password reset is currently unavailable. Please contact support.');
+      } else if (errorMessage.includes('404') || errorMessage.includes('endpoint was not found')) {
+        setError('Server configuration error. Please try again later.');
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -151,11 +157,14 @@ export default function PasswordResetScreen({navigation}: Props) {
         {text: 'Continue', onPress: () => navigation.replace('SignIn')},
       ]);
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Unable to update your password.',
-      );
+      const errorMessage = requestError instanceof Error ? requestError.message : 'Unable to update your password.';
+      if (errorMessage.includes('400') || errorMessage.includes('invalid or expired')) {
+        setError('The reset code is invalid or expired. Please request a new code.');
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

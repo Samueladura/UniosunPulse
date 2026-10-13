@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Dimensions,
 } from 'react-native';
 import Video, {Video as VideoType} from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
@@ -16,9 +17,13 @@ interface Props {
   video?: string | null;
 }
 
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
+const MEDIA_WIDTH = SCREEN_WIDTH - 32; // 16px padding on each side
+
 export default function PostMedia({image, video}: Props) {
   const [imageExpanded, setImageExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [videoDimensions, setVideoDimensions] = useState<{width: number; height: number} | null>(null);
   const videoRef = useRef<VideoType>(null);
 
   // Pause video when screen loses focus (user navigates to another tab)
@@ -33,10 +38,20 @@ export default function PostMedia({image, video}: Props) {
     }, []),
   );
 
+  const handleVideoLoad = (data: {width: number; height: number}) => {
+    // Calculate aspect ratio and set appropriate height
+    const aspectRatio = data.height / data.width;
+    setVideoDimensions({width: data.width, height: data.height});
+  };
+
   if (video) {
+    const videoHeight = videoDimensions
+      ? Math.min(MEDIA_WIDTH * (videoDimensions.height / videoDimensions.width), 400)
+      : 240;
+
     return (
       <View
-        style={styles.videoWrap}
+        style={[styles.videoWrap, {height: videoHeight}]}
         onTouchStart={event => event.stopPropagation()}>
         <Video
           ref={videoRef}
@@ -47,6 +62,7 @@ export default function PostMedia({image, video}: Props) {
           paused={!playing}
           onEnd={() => setPlaying(false)}
           onError={() => setPlaying(false)}
+          onLoad={handleVideoLoad}
         />
         {!playing && (
           <Pressable
@@ -117,7 +133,6 @@ const styles = StyleSheet.create({
   },
   videoWrap: {
     width: '100%',
-    height: 240,
     backgroundColor: '#111111',
     borderRadius: 12,
     overflow: 'hidden',
