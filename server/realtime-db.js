@@ -5,7 +5,7 @@ async function setupRealtimeDatabase(pool) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS user_devices (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        user_id text REFERENCES users(id) ON DELETE CASCADE,
         device_token TEXT NOT NULL,
         device_type VARCHAR(20) NOT NULL, -- 'ios', 'android', 'web'
         push_enabled BOOLEAN DEFAULT true,
@@ -19,7 +19,7 @@ async function setupRealtimeDatabase(pool) {
       CREATE TABLE IF NOT EXISTS realtime_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         event_type VARCHAR(50) NOT NULL, -- 'new-post', 'mention', 'election-update', 'admin-alert'
-        user_id UUID REFERENCES users(id),
+        user_id text REFERENCES users(id),
         target_id UUID, -- post_id, election_id, etc.
         target_type VARCHAR(20), -- 'post', 'election', 'user'
         metadata JSONB,
