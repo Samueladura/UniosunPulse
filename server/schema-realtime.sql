@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_realtime_events_created_at ON realtime_events(cre
 
 -- User preferences table for notification preferences
 CREATE TABLE IF NOT EXISTS user_preferences (
-  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  user_id text PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   new_posts BOOLEAN DEFAULT true,
   mentions BOOLEAN DEFAULT true,
   election_updates BOOLEAN DEFAULT true,
