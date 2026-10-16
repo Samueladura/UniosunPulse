@@ -1,7 +1,3 @@
-require('dotenv').config({
-  path: require('path').resolve(__dirname, '..', '.env'),
-});
-
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -22,6 +18,21 @@ const {
   hashChallenge,
   verifyTotp,
 } = require('./mfa');
+const {setupWebSocketServer} = require('./websocket');
+const {setupBroadcastHandlers} = require('./broadcast');
+
+// Define allowed tables for database queries
+const allowedTables = new Set([
+  'posts',
+  'campus_events',
+  'career_opportunities',
+  'clubs',
+  'marketplace_listings',
+  'two_factor_factors',
+  'users',
+  'auth_sessions',
+  'profiles',
+]);
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
@@ -45,31 +56,11 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-const allowedTables = new Set([
-  'profiles',
-  'posts',
-  'likes',
-  'comments',
-  'follows',
-  'alerts',
-  'blocked_users',
-  'login_history',
-  'student_verifications',
-  'reports',
-  'campus_events',
-  'event_rsvps',
-  'marketplace_listings',
-  'saved_items',
-  'career_opportunities',
-  'opportunity_applications',
-  'clubs',
-  'club_memberships',
-  'elections',
-  'positions',
-  'election_candidates',
-  'election_votes',
-  'admin_audit_logs',
-]);
+// Start the server
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+  console.log('WebSocket server initialized for real-time updates');
+});
 const columnCache = new Map();
 const emailSchema = z.string().trim().toLowerCase().email();
 
@@ -3061,9 +3052,22 @@ async function start() {
   if (!fs.existsSync(schemaPath)) {
     throw new Error('Database schema file is missing.');
   }
-  app.listen(port, () => {
+
+  // Initialize real-time database schema
+  const {setupRealtimeDatabase} = require('./realtime-db');
+  await setupRealtimeDatabase(pool);
+
+  // Start the server
+  const server = app.listen(port, () => {
     console.log(`UniOsunPulse API listening on port ${port}.`);
+    console.log('WebSocket server initialized for real-time updates');
   });
+
+  // Initialize WebSocket server for real-time updates and push notifications
+  const {io, broadcast} = setupWebSocketServer(server, pool);
+
+  // Set up event broadcasting for key operations
+  setupBroadcastHandlers(io, broadcast, pool);
 }
 
 start().catch(error => {
