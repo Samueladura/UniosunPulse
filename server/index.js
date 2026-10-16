@@ -3058,9 +3058,29 @@ async function start() {
   await setupRealtimeDatabase(pool);
 
   // Start the server
-  const server = app.listen(port, () => {
-    console.log(`UniOsunPulse API listening on port ${port}.`);
-    console.log('WebSocket server initialized for real-time updates');
+  let server;
+  try {
+    server = app.listen(port, () => {
+      console.log(`UniOsunPulse API listening on port ${port}.`);
+      console.log('WebSocket server initialized for real-time updates');
+    });
+  } catch (error) {
+    console.error(`Failed to start API on port ${port}:`, error.message);
+    pool.end();
+    process.exitCode = 1;
+    return;
+  }
+
+  server.on('error', error => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(
+        `Port ${port} is already in use. Another process may be running the API.`,
+      );
+    } else {
+      console.error('Server error:', error.message);
+    }
+    pool.end();
+    process.exitCode = 1;
   });
 
   // Initialize WebSocket server for real-time updates and push notifications
