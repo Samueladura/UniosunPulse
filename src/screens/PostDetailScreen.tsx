@@ -307,7 +307,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
-  const authorName = postParam?.author || 'Adewale Johnson';
+  const authorName = postParam?.author || postParam?.author_name || 'Unknown author';
   const authorAvatar =
     postParam?.author_id === 'admin_official'
       ? require('../assets/uniosun-logo.png')
@@ -626,9 +626,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
           </TouchableOpacity>
           <View style={styles.flexOne}>
             <Text style={styles.authorName}>{authorName}</Text>
-            <Text style={styles.authorMeta}>
-              {postParam?.department || 'Student'} • {postTime}
-            </Text>
+            <Text style={styles.authorMeta}>{postTime}</Text>
           </View>
           <TouchableOpacity
             style={[

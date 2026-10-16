@@ -163,6 +163,17 @@ export default function UserProfileScreen({navigation, route}: Props) {
         following: followingCount,
       };
     }
+    if (requestId === 'admin_official') {
+      return {
+        id: requestId,
+        name: 'Campus Admin (Official)',
+        handle: '@uniosunadmin',
+        avatar: '',
+        bio: 'Campus Admin',
+        followers: followersCount,
+        following: followingCount,
+      };
+    }
     return {
       id: requestId,
       name: 'Unknown User',
@@ -336,7 +347,7 @@ export default function UserProfileScreen({navigation, route}: Props) {
                 activeOpacity={0.9}
                 onPress={() =>
                   navigation.navigate('PostDetail', {
-                    post: {...post, authorId: resolvedUser.id},
+                    post: {...post, authorId: resolvedUser.id, author: resolvedUser.name},
                   })
                 }>
                 <Text style={styles.postCardBody} numberOfLines={2}>
