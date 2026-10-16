@@ -1,5 +1,5 @@
 -- Database schema for real-time updates and push notifications
--- This schema extends the base UniOsunPulse database schema
+-- This schema extends the base UniOsunInfo database schema
 -- NOTE: user_id columns assume users.id is TEXT. Change if yours differs.
 
 -- Optional: clean up any partially created tables from the failed run

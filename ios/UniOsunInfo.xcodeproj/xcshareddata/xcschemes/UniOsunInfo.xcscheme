@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "UniOsunPulse.app"
-               BlueprintName = "UniOsunPulse"
-               ReferencedContainer = "container:UniOsunPulse.xcodeproj">
+               BuildableName = "UniOsunInfo.app"
+               BlueprintName = "UniOsunInfo"
+               ReferencedContainer = "container:UniOsunInfo.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "UniOsunPulseTests.xctest"
-               BlueprintName = "UniOsunPulseTests"
-               ReferencedContainer = "container:UniOsunPulse.xcodeproj">
+               BuildableName = "UniOsunInfoTests.xctest"
+               BlueprintName = "UniOsunInfoTests"
+               ReferencedContainer = "container:UniOsunInfo.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "UniOsunPulse.app"
-            BlueprintName = "UniOsunPulse"
-            ReferencedContainer = "container:UniOsunPulse.xcodeproj">
+            BuildableName = "UniOsunInfo.app"
+            BlueprintName = "UniOsunInfo"
+            ReferencedContainer = "container:UniOsunInfo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "UniOsunPulse.app"
-            BlueprintName = "UniOsunPulse"
-            ReferencedContainer = "container:UniOsunPulse.xcodeproj">
+            BuildableName = "UniOsunInfo.app"
+            BlueprintName = "UniOsunInfo"
+            ReferencedContainer = "container:UniOsunInfo.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -24,7 +24,7 @@ async function seed() {
        SET password_hash = EXCLUDED.password_hash,
            email_verified = true,
            role = 'admin'`,
-    ['uniosunpulse@gmail.com', adminHash, 'Admin'],
+    ['UniOsunInfo@gmail.com', adminHash, 'Admin'],
   );
 
   const {

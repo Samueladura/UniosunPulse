@@ -1,8 +1,8 @@
 import {API_BASE_URL, APPS_SCRIPT_EMAIL_URL} from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_API_BASE_URL = 'https://uniosunpulsebackend.onrender.com/api';
-const ACCESS_TOKEN_KEY = 'uniosunpulse.access_token';
+const DEFAULT_API_BASE_URL = 'https://UniOsunInfobackend.onrender.com/api';
+const ACCESS_TOKEN_KEY = 'UniOsunInfo.access_token';
 const configuredBaseUrl = (API_BASE_URL || DEFAULT_API_BASE_URL).replace(
   /\/+$/,
   '',

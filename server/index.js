@@ -363,7 +363,7 @@ app.post(
     }
 
     const timestamp = Math.floor(Date.now() / 1000);
-    const folder = `uniosunpulse/${target}`;
+    const folder = `UniOsunInfo/${target}`;
     const publicId = crypto.randomUUID();
     const signature = crypto
       .createHash('sha1')
@@ -1617,8 +1617,8 @@ app.post(
   authenticate,
   asyncRoute(async (req, res) => {
     const secret = generateTotpSecret();
-    const label = encodeURIComponent(`UniOsunPulse:${req.user.email}`);
-    const issuer = encodeURIComponent('UniOsunPulse');
+    const label = encodeURIComponent(`UniOsunInfo:${req.user.email}`);
+    const issuer = encodeURIComponent('UniOsunInfo');
     const uri = `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
     const qrCode = await QRCode.toDataURL(uri, {errorCorrectionLevel: 'M'});
     const client = await pool.connect();
@@ -3081,7 +3081,7 @@ async function start() {
   let server;
   try {
     server = app.listen(port, () => {
-      console.log(`UniOsunPulse API listening on port ${port}.`);
+      console.log(`UniOsunInfo API listening on port ${port}.`);
       console.log('WebSocket server initialized for real-time updates');
     });
   } catch (error) {

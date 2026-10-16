@@ -1,4 +1,4 @@
--- UniOsunPulse PostgreSQL schema for Neon.
+-- UniOsunInfo PostgreSQL schema for Neon.
 -- Apply with `npm run db:schema` to create or upgrade the application schema.
 
 BEGIN;

@@ -350,11 +350,8 @@ export default function ElectionBallotScreen({navigation, route}: any) {
         <TouchableOpacity onPress={() => navigation?.goBack?.()}>
           <Icon name="arrow-left" size={22} color={C.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Election Ballot</Text>
-        <TouchableOpacity>
-          <Icon name="settings" size={20} color={C.text} />
-        </TouchableOpacity>
-      </View>
+         <Text style={styles.headerTitle}>Election Ballot</Text>
+       </View>
 
       <ScrollView
         style={styles.flexOne}

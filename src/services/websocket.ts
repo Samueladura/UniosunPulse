@@ -6,7 +6,7 @@ import {AsyncStorage} from '@react-native-async-storage/async-storage';
 import {APP_CONFIG} from '../config/app';
 
 // WebSocket connection configuration
-const SOCKET_URL = APP_CONFIG.WS_URL || 'https://uniosunpulsebackend.onrender.com';
+const SOCKET_URL = APP_CONFIG.WS_URL || 'https://UniOsunInfobackend.onrender.com';
 const WEBSOCKET_TIMEOUT = 30000;
 
 export interface WebSocketMessage {
@@ -47,7 +47,7 @@ export class WebSocketService {
 
     try {
       // Get authentication token
-      const token = await AsyncStorage.getItem('uniosunpulse.access_token');
+      const token = await AsyncStorage.getItem('UniOsunInfo.access_token');
       if (!token) {
         console.log('No authentication token available for WebSocket connection');
         this.isConnecting = false;

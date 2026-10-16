@@ -20,7 +20,7 @@ async function applySchema() {
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(schema);
-  console.log('UniOsunPulse schema applied successfully.');
+  console.log('UniOsunInfo schema applied successfully.');
 }
 
 applySchema()

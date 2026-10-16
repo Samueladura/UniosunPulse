@@ -1,5 +1,5 @@
 {
-  "name": "uniosunpulse-server",
+  "name": "UniOsunInfo-server",
   "version": "1.0.0",
   "description": "UniOsun Pulse API Server",
   "main": "index.js",

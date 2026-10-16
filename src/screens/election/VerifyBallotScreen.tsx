@@ -224,11 +224,8 @@ export default function VerifyBallotScreen({
           source={require('../../assets/uniosun-logo.png')}
           style={styles.headerLogo}
         />
-        <Text style={styles.headerTitle}>UniOsun Pulse</Text>
-        <TouchableOpacity>
-          <Icon name="settings" size={20} color={C.text} />
-        </TouchableOpacity>
-      </View>
+         <Text style={styles.headerTitle}>UniOsun Pulse</Text>
+       </View>
 
       <ScrollView
         style={styles.flexOne}

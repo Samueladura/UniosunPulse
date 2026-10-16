@@ -1,4 +1,4 @@
-package com.uniosunpulse
+package com.UniOsunInfo
 
 import android.app.Application
 import com.facebook.react.PackageList

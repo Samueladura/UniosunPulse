@@ -73,9 +73,9 @@ android {
     ndkVersion rootProject.ext.ndkVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.uniosunpulse"
+    namespace "com.UniOsunInfo"
     defaultConfig {
-        applicationId "com.uniosunpulse"
+        applicationId "com.UniOsunInfo"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
