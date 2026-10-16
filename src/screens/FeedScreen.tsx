@@ -13,6 +13,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import PostMedia from '../components/PostMedia';
+import RichText from '../components/RichText';
 import {colors, radius, spacing, typography} from '../theme/colors.ts';
 import {useThemedStyles} from '../theme/PreferencesContext';
 import {usePosts, PostWithMeta} from '../context/PostsContext';
@@ -124,6 +125,10 @@ export default function FeedScreen({navigation}: Props) {
     if (!comments[id]) {
       loadComments(id);
     }
+  };
+
+  const handleHashtagPress = (tag: string) => {
+    rootNav?.navigate('Search', {initialQuery: tag});
   };
 
   const submitComment = async () => {
@@ -409,7 +414,11 @@ export default function FeedScreen({navigation}: Props) {
               </View>
             </View>
 
-            <Text style={styles.postBody}>{item.body}</Text>
+            <RichText
+              text={item.body ?? ''}
+              style={styles.postBody}
+              onHashtagPress={handleHashtagPress}
+            />
 
             <PostMedia image={item.image} video={item.video} />
 
@@ -547,7 +556,11 @@ export default function FeedScreen({navigation}: Props) {
                           />
                         </TouchableOpacity>
                       </View>
-                      <Text style={styles.commentText}>{comment.body}</Text>
+                      <RichText
+                        text={comment.body}
+                        style={styles.commentText}
+                        onHashtagPress={handleHashtagPress}
+                      />
                     </View>
                   </View>
                 ))

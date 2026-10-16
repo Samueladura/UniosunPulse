@@ -23,7 +23,7 @@ export function isVideoUrl(url: string): boolean {
 
 export async function uploadPostMedia(
   asset: Asset,
-  target: 'posts' | 'marketplace' = 'posts',
+  target: 'posts' | 'marketplace' | 'elections' = 'posts',
 ): Promise<{image?: string; video?: string}> {
   if (!asset.uri) {
     throw new Error('The selected media file is unavailable.');

@@ -502,6 +502,14 @@ export default function AdminElectionManagerScreen({navigation}: any) {
 
             return (
               <View style={styles.card}>
+                {item.imageUrl ? (
+                  <Image
+                    source={{uri: item.imageUrl}}
+                    style={styles.electionImage}
+                    resizeMode="cover"
+                  />
+                ) : null}
+
                 <View style={styles.cardHeader}>
                   <View style={styles.catBadge}>
                     <Text style={styles.catBadgeText}>{item.category}</Text>
@@ -776,6 +784,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     gap: 10,
+    overflow: 'hidden',
+  },
+  electionImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.sm,
   },
   cardHeader: {
     flexDirection: 'row',

@@ -56,6 +56,7 @@ export type MarketplaceListing = {
   category: string;
   price: number;
   location: string;
+  contact_phone: string | null;
   image_urls: string[];
   created_at: string;
   is_owner: boolean;
@@ -208,6 +209,7 @@ export function createMarketplaceListing(input: {
   category: string;
   price: number;
   location: string;
+  contact_phone?: string;
   image_urls: string[];
 }): Promise<MarketplaceListing> {
   return unwrap(
@@ -226,6 +228,7 @@ export function updateMarketplaceListing(
     category: string;
     price: number;
     location: string;
+    contact_phone?: string;
     image_urls: string[];
   },
 ): Promise<MarketplaceListing> {

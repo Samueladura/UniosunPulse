@@ -257,6 +257,7 @@ CREATE TABLE IF NOT EXISTS marketplace_listings (
   category text NOT NULL DEFAULT 'Other',
   price numeric(12, 2) NOT NULL CHECK (price >= 0),
   location text NOT NULL,
+  contact_phone text,
   image_urls text[] NOT NULL DEFAULT '{}',
   status text NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'sold', 'removed')),
@@ -265,6 +266,8 @@ CREATE TABLE IF NOT EXISTS marketplace_listings (
 );
 ALTER TABLE marketplace_listings
   ADD COLUMN IF NOT EXISTS image_urls text[] NOT NULL DEFAULT '{}';
+ALTER TABLE marketplace_listings
+  ADD COLUMN IF NOT EXISTS contact_phone text;
 CREATE INDEX IF NOT EXISTS idx_marketplace_listings_status_created_at
   ON marketplace_listings (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_marketplace_listings_seller

@@ -66,7 +66,7 @@ export type RootStackParamList = {
   Welcome: undefined;
   Home: undefined;
   NewPost: undefined;
-  Search: undefined;
+  Search: {initialQuery?: string};
   Marketplace: undefined;
   Saved: undefined;
   Settings: undefined;
@@ -86,8 +86,7 @@ export type RootStackParamList = {
   AdminLiveResults: {electionId?: string};
 };
 
-export const navigationRef =
-  createNavigationContainerRef<RootStackParamList>();
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 export type ElectionStackParamList = {
   ElectionHub: undefined;
@@ -119,7 +118,10 @@ function ElectionStack() {
       <ElectionNav.Screen name="VerifyBallot" component={VerifyBallotScreen} />
       <ElectionNav.Screen name="VoteSuccess" component={VoteSuccessScreen} />
       <ElectionNav.Screen name="LiveResults" component={LiveResultsScreen} />
-      <ElectionNav.Screen name="ElectionArchives" component={ElectionArchivesScreen} />
+      <ElectionNav.Screen
+        name="ElectionArchives"
+        component={ElectionArchivesScreen}
+      />
     </ElectionNav.Navigator>
   );
 }
@@ -233,8 +235,8 @@ export default function AppNavigator() {
           sessionExpiredDuringStartup.current
             ? 'SignIn'
             : session
-              ? 'Home'
-              : 'Onboarding',
+            ? 'Home'
+            : 'Onboarding',
         );
         setChecking(false);
       }

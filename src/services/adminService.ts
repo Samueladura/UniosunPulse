@@ -32,6 +32,7 @@ export interface AdminElection {
   title: string;
   category: 'SUG' | 'FACULTY' | 'DEPARTMENTAL';
   description?: string;
+  imageUrl?: string;
   status: 'draft' | 'active' | 'ended';
   startTime?: string;
   endTime?: string;
@@ -104,7 +105,9 @@ export const adminService = {
           }
         } catch {
           // Fallback to counting verifications + approved as approximation
-          totalStudents = verifications?.filter((v: any) => v.status === 'approved').length || 0;
+          totalStudents =
+            verifications?.filter((v: any) => v.status === 'approved').length ||
+            0;
         }
       }
 
@@ -364,6 +367,7 @@ export const adminService = {
           title: item.title,
           category: item.category,
           description: item.description,
+          imageUrl: item.image_url ?? undefined,
           status: item.status,
           startTime: item.start_time,
           endTime: item.end_time,
@@ -386,6 +390,7 @@ export const adminService = {
     startTime?: string,
     endTime?: string,
     maxCandidates?: number,
+    imageUrl?: string,
   ): Promise<AdminElection> {
     // Determine initial status based on start time
     let initialStatus: 'draft' | 'active' = 'draft';
@@ -407,6 +412,7 @@ export const adminService = {
           title,
           category,
           description,
+          image_url: imageUrl || null,
           status: initialStatus,
           start_time: startTime || null,
           end_time: endTime || null,
@@ -426,6 +432,7 @@ export const adminService = {
       title: data.title,
       category: data.category,
       description: data.description,
+      imageUrl: data.image_url ?? undefined,
       status: data.status,
       startTime: data.start_time,
       endTime: data.end_time,
@@ -441,6 +448,56 @@ export const adminService = {
   ): Promise<boolean> {
     try {
       await backend.from('elections').update({status}).eq('id', id);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  async updateElection(
+    id: string,
+    fields: {
+      title?: string;
+      category?: 'SUG' | 'FACULTY' | 'DEPARTMENTAL';
+      description?: string;
+      imageUrl?: string;
+      startTime?: string;
+      endTime?: string;
+      maxCandidates?: number;
+    },
+  ): Promise<boolean> {
+    try {
+      const payload: Record<string, any> = {};
+      if (fields.title !== undefined) {
+        payload.title = fields.title;
+      }
+      if (fields.category !== undefined) {
+        payload.category = fields.category;
+      }
+      if (fields.description !== undefined) {
+        payload.description = fields.description;
+      }
+      if (fields.imageUrl !== undefined) {
+        payload.image_url = fields.imageUrl || null;
+      }
+      if (fields.startTime !== undefined) {
+        payload.start_time = fields.startTime || null;
+      }
+      if (fields.endTime !== undefined) {
+        payload.end_time = fields.endTime || null;
+      }
+      if (fields.startTime !== undefined) {
+        payload.start_at = fields.startTime || null;
+      }
+      if (fields.endTime !== undefined) {
+        payload.end_at = fields.endTime || null;
+      }
+      if (fields.maxCandidates !== undefined) {
+        payload.max_candidates = fields.maxCandidates || null;
+      }
+      payload.updated_at = new Date().toISOString();
+
+      await backend.from('elections').update(payload).eq('id', id);
       return true;
     } catch {
       return false;
@@ -494,7 +551,9 @@ export const adminService = {
       .select()
       .single();
     if (error || !data) {
-      throw new Error(error?.message || 'Failed to add the election candidate.');
+      throw new Error(
+        error?.message || 'Failed to add the election candidate.',
+      );
     }
 
     return {

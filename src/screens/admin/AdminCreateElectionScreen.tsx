@@ -9,10 +9,13 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import {launchImageLibrary} from 'react-native-image-picker';
 import {colors, spacing, radius, typography} from '../../theme/colors';
 import {adminService} from '../../services/adminService';
+import {uploadPostMedia} from '../../services/media';
 
 type PendingCandidate = {
   name: string;
@@ -45,6 +48,8 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
   const [maxCandidates, setMaxCandidates] = useState(
     existingElection?.maxCandidates?.toString() || '',
   );
+  const [imageUrl, setImageUrl] = useState(existingElection?.imageUrl || '');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const toISODateTime = (date: string, time: string): string => {
@@ -150,6 +155,28 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
     setPendingCandidates(prev => prev.filter((_, i) => i !== index));
   };
 
+  const pickElectionImage = async () => {
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      selectionLimit: 1,
+      quality: 0.8,
+    });
+    if (result.didCancel || !result.assets?.[0]?.uri) {
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const uploaded = await uploadPostMedia(result.assets[0], 'elections');
+      if (uploaded.image) {
+        setImageUrl(uploaded.image);
+      }
+    } catch {
+      Alert.alert('Image upload failed. You can still save without an image.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleCreateElection = async () => {
     if (!title.trim()) {
       Alert.alert('Required Field', 'Please enter an election title.');
@@ -158,33 +185,53 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
 
     setCreating(true);
     try {
-      const newElec = await adminService.createElection(
-        title.trim(),
+      const isEdit = !!existingElection;
+      const electionId = existingElection?.id;
+      const electionPayload = {
+        title: title.trim(),
         category,
-        description.trim(),
-        combinedStartTime || undefined,
-        combinedEndTime || undefined,
-        maxCandidates ? parseInt(maxCandidates, 10) : undefined,
-      );
+        description: description.trim(),
+        startTime: combinedStartTime || undefined,
+        endTime: combinedEndTime || undefined,
+        maxCandidates: maxCandidates ? parseInt(maxCandidates, 10) : undefined,
+        imageUrl: imageUrl.trim() || undefined,
+      };
 
-      for (const candidate of pendingCandidates) {
-        await adminService.addCandidate(
-          newElec.id,
-          candidate.name,
-          candidate.position,
-          candidate.manifesto || undefined,
-          candidate.avatar || undefined,
+      if (isEdit && electionId) {
+        await adminService.updateElection(electionId, electionPayload);
+        Alert.alert(
+          'Election Updated',
+          'The election details have been saved.',
+        );
+      } else {
+        const newElec = await adminService.createElection(
+          electionPayload.title,
+          electionPayload.category,
+          electionPayload.description,
+          electionPayload.startTime,
+          electionPayload.endTime,
+          electionPayload.maxCandidates,
+          electionPayload.imageUrl,
+        );
+
+        for (const candidate of pendingCandidates) {
+          await adminService.addCandidate(
+            newElec.id,
+            candidate.name,
+            candidate.position,
+            candidate.manifesto || undefined,
+            candidate.avatar || undefined,
+          );
+        }
+        Alert.alert(
+          'Election Created',
+          'The election session and candidates have been saved.',
         );
       }
-
-      Alert.alert(
-        'Election Created',
-        'The election session and candidates have been saved.',
-      );
       navigation.goBack();
     } catch (error) {
       Alert.alert(
-        'Election Creation Failed',
+        'Election Save Failed',
         error instanceof Error ? error.message : 'Please try again.',
       );
     } finally {
@@ -316,6 +363,39 @@ export default function AdminCreateElectionScreen({navigation, route}: Props) {
                 keyboardType="number-pad"
               />
             </View>
+          </View>
+
+          <View style={styles.formGroup}>
+            <TouchableOpacity
+              style={styles.imagePickerWrap}
+              onPress={pickElectionImage}
+              disabled={uploadingImage}>
+              {imageUrl ? (
+                <Image
+                  source={{uri: imageUrl}}
+                  style={styles.imagePreview}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Icon name="image" size={28} color={colors.textMuted} />
+                  <Text style={styles.imagePlaceholderText}>
+                    {uploadingImage
+                      ? 'Uploading...'
+                      : 'Tap to add election image'}
+                  </Text>
+                </View>
+              )}
+              {imageUrl && (
+                <TouchableOpacity
+                  style={styles.removeImageBtn}
+                  onPress={() => {
+                    setImageUrl('');
+                  }}>
+                  <Icon name="x" size={16} color={colors.danger} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
           </View>
 
           <View style={styles.candidatesSection}>
@@ -507,6 +587,43 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
     marginTop: -4,
+  },
+  imagePickerWrap: {
+    width: '100%',
+    height: 200,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    overflow: 'hidden',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 200,
+  },
+  imagePlaceholder: {
+    gap: 6,
+    alignItems: 'center',
+  },
+  imagePlaceholderText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: colors.danger,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   submitModalBtn: {
     height: 46,

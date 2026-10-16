@@ -352,7 +352,7 @@ app.post(
     if (resourceType !== 'image' && resourceType !== 'video') {
       return sendError(res, 400, 'Media type must be image or video.');
     }
-    if (!['posts', 'marketplace'].includes(target)) {
+    if (!['posts', 'marketplace', 'elections'].includes(target)) {
       return sendError(res, 400, 'Unsupported media destination.');
     }
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
@@ -1376,6 +1376,7 @@ app.patch(
         category: z.string().trim().min(1).max(40).optional(),
         price: z.number().finite().nonnegative().max(100000000).optional(),
         location: z.string().trim().min(2).max(120).optional(),
+        contact_phone: z.string().trim().min(1).max(25).optional(),
         image_urls: z
           .array(z.string().url().startsWith('https://'))
           .max(5)
@@ -1401,8 +1402,8 @@ app.patch(
          AND seller_id = $${values.length}
          AND status = 'active'
        RETURNING id, seller_id, title, description, category,
-                 price::float8 AS price, location, image_urls, status,
-                 created_at`,
+                  price::float8 AS price, location, contact_phone,
+                  image_urls, status, created_at`,
       values,
     );
     if (rows.length === 0) {
@@ -2487,7 +2488,8 @@ app.get(
       `SELECT listing.id, listing.seller_id, listing.title,
               listing.description, listing.category,
               listing.price::float8 AS price,
-              listing.location, listing.image_urls, listing.created_at,
+              listing.location, listing.contact_phone,
+              listing.image_urls, listing.created_at,
               COALESCE(NULLIF(profile.full_name, ''), 'Student') AS seller,
               listing.seller_id = $1 AS is_owner
        FROM marketplace_listings AS listing
@@ -2512,6 +2514,7 @@ app.post(
         category: z.string().trim().min(1).max(40),
         price: z.number().finite().nonnegative().max(100000000),
         location: z.string().trim().min(2).max(120),
+        contact_phone: z.string().trim().min(1).max(25).optional(),
         image_urls: z
           .array(z.string().url().startsWith('https://'))
           .max(5)
@@ -2525,15 +2528,32 @@ app.post(
         input.error.issues[0]?.message || 'Invalid listing details.',
       );
     }
-    const {title, description, category, price, location, image_urls} =
-      input.data;
+    const {
+      title,
+      description,
+      category,
+      price,
+      location,
+      contact_phone,
+      image_urls,
+    } = input.data;
     const {rows} = await pool.query(
       `INSERT INTO marketplace_listings
-         (seller_id, title, description, category, price, location, image_urls)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (seller_id, title, description, category, price, location, contact_phone, image_urls)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, seller_id, title, description, category,
-                 price::float8 AS price, location, image_urls, created_at`,
-      [req.user.id, title, description, category, price, location, image_urls],
+                 price::float8 AS price, location, contact_phone,
+                 image_urls, created_at`,
+      [
+        req.user.id,
+        title,
+        description,
+        category,
+        price,
+        location,
+        contact_phone,
+        image_urls,
+      ],
     );
     return res.status(201).json({
       data: {

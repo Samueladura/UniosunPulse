@@ -2,8 +2,10 @@ import React, {useCallback, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Clipboard,
   FlatList,
   Image,
+  Linking,
   Modal,
   RefreshControl,
   ScrollView,
@@ -105,6 +107,23 @@ function getStyles() {
       marginTop: spacing.sm,
     },
     metaText: {fontSize: 13, color: colors.textSecondary},
+    phoneRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: spacing.sm,
+    },
+    phoneText: {
+      fontSize: 13,
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    phoneAction: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 6,
+    },
+    phoneActionText: {fontSize: 11, fontWeight: '700', color: colors.primary},
     ctaButton: {
       marginTop: spacing.md,
       backgroundColor: colors.primary,
@@ -246,6 +265,7 @@ export default function MarketplaceScreen({navigation}: Props) {
   const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
   const [location, setLocation] = useState('');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const loadListings = useCallback(async () => {
@@ -408,11 +428,35 @@ export default function MarketplaceScreen({navigation}: Props) {
     setCategory(item?.category ?? '');
     setPrice(item ? String(item.price) : '');
     setLocation(item?.location ?? '');
+    setPhone(item?.contact_phone ?? '');
     setSelectedImages([]);
     setExistingImages(item?.image_urls ?? []);
     setError(null);
     setShowForm(true);
   };
+
+  const copyPhone = async (number: string | null) => {
+    if (!number) {
+      return;
+    }
+    try {
+      await Clipboard.setString(number);
+      Alert.alert('Copied', 'Phone number copied to clipboard.');
+    } catch {
+      Alert.alert('Unable to copy number.');
+    }
+  };
+
+  const callPhone = (number: string | null) => {
+    if (!number) {
+      return;
+    }
+    Linking.openURL(`tel:${number}`).catch(() =>
+      Alert.alert('Unable to start a call on this device.'),
+    );
+  };
+
+  const PHONE_REGEX = /^\+?[\d\s-]{7,25}$/;
 
   const chooseListingImages = async () => {
     const response = await launchImageLibrary({
@@ -440,10 +484,13 @@ export default function MarketplaceScreen({navigation}: Props) {
       !location.trim() ||
       price.trim() === '' ||
       !Number.isFinite(parsedPrice) ||
-      parsedPrice < 0
+      parsedPrice < 0 ||
+      (phone.trim() && !PHONE_REGEX.test(phone))
     ) {
       setError(
-        'Enter a title, category, non-negative price, and pickup location.',
+        phone.trim() && !PHONE_REGEX.test(phone)
+          ? 'Enter a valid phone number (e.g. +234 801 234 5678).'
+          : 'Enter a title, category, non-negative price, and pickup location.',
       );
       return;
     }
@@ -467,6 +514,7 @@ export default function MarketplaceScreen({navigation}: Props) {
         category,
         price: parsedPrice,
         location,
+        contact_phone: phone.trim() || undefined,
         image_urls: [...existingImages, ...uploadedImages],
       };
       if (editing) {
@@ -485,6 +533,7 @@ export default function MarketplaceScreen({navigation}: Props) {
       setCategory('');
       setPrice('');
       setLocation('');
+      setPhone('');
       setExistingImages([]);
       setSelectedImages([]);
     } catch (requestError) {
@@ -575,6 +624,23 @@ export default function MarketplaceScreen({navigation}: Props) {
               <Icon name="map-pin" size={14} color={colors.textSecondary} />
               <Text style={styles.metaText}>{item.location}</Text>
             </View>
+
+            {item.contact_phone && (
+              <View style={styles.phoneRow}>
+                <Icon name="phone" size={14} color={colors.textSecondary} />
+                <Text style={styles.phoneText}>{item.contact_phone}</Text>
+                <TouchableOpacity
+                  style={styles.phoneAction}
+                  onPress={() => copyPhone(item.contact_phone)}>
+                  <Text style={styles.phoneActionText}>Copy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.phoneAction}
+                  onPress={() => callPhone(item.contact_phone)}>
+                  <Text style={styles.phoneActionText}>Call</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TouchableOpacity
               style={styles.ctaButton}
@@ -674,6 +740,14 @@ export default function MarketplaceScreen({navigation}: Props) {
               value={location}
               onChangeText={setLocation}
               maxLength={120}
+            />
+            <TextInput
+              style={styles.formInput}
+              placeholder="Seller phone (e.g. +234 801 234 5678)"
+              placeholderTextColor={colors.textMuted}
+              value={phone}
+              onChangeText={setPhone}
+              maxLength={25}
             />
             <Text style={styles.imageLabel}>Listing photos (up to 5)</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>

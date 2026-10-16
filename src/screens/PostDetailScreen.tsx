@@ -15,6 +15,7 @@ import {colors} from '../theme/colors.ts';
 import {backend} from '../services/backend';
 import Icon from 'react-native-vector-icons/Feather';
 import PostMedia from '../components/PostMedia';
+import RichText from '../components/RichText';
 import {usePrefs, useThemedStyles} from '../theme/PreferencesContext';
 import {
   fetchPostById,
@@ -307,7 +308,8 @@ export default function PostDetailScreen({navigation, route}: Props) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
-  const authorName = postParam?.author || postParam?.author_name || 'Unknown author';
+  const authorName =
+    postParam?.author || postParam?.author_name || 'Unknown author';
   const authorAvatar =
     postParam?.author_id === 'admin_official'
       ? require('../assets/uniosun-logo.png')
@@ -590,6 +592,10 @@ export default function PostDetailScreen({navigation, route}: Props) {
     navigation.navigate('UserProfile', {userId: postParam?.authorId || 'u1'});
   };
 
+  const handleHashtagPress = (tag: string) => {
+    navigation.navigate('Search', {initialQuery: tag});
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -678,7 +684,11 @@ export default function PostDetailScreen({navigation, route}: Props) {
           </View>
         ) : null}
 
-        <Text style={styles.postBody}>{postBody}</Text>
+        <RichText
+          text={postBody ?? ''}
+          style={styles.postBody}
+          onHashtagPress={handleHashtagPress}
+        />
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
@@ -752,6 +762,7 @@ export default function PostDetailScreen({navigation, route}: Props) {
             currentUserId={currentUserId}
             onDelete={handleDeleteComment}
             onReport={handleReportComment}
+            onHashtagPress={handleHashtagPress}
           />
         ))}
       </ScrollView>
@@ -806,12 +817,14 @@ function CommentItem({
   currentUserId,
   onDelete,
   onReport,
+  onHashtagPress,
 }: {
   comment: Comment;
   isReply?: boolean;
   currentUserId?: string | null;
   onDelete?: (id: string) => void;
   onReport?: (id: string) => void;
+  onHashtagPress?: (tag: string) => void;
 }) {
   const C = usePrefs().isDark ? DARK_COLORS : LIGHT_COLORS;
   const styles = useThemedStyles(() => getStyles(C), []);
@@ -851,7 +864,11 @@ function CommentItem({
               <Text style={styles.commentTime}>{comment.time}</Text>
             )}
           </View>
-          <Text style={styles.commentBody}>{comment.body}</Text>
+          <RichText
+            text={comment.body}
+            style={styles.commentBody}
+            onHashtagPress={onHashtagPress}
+          />
         </View>
         {!comment.isAuthor && (
           <TouchableOpacity>
@@ -866,6 +883,7 @@ function CommentItem({
             currentUserId={currentUserId}
             onDelete={onDelete}
             onReport={onReport}
+            onHashtagPress={onHashtagPress}
           />
         ))}
       </View>

@@ -26,19 +26,15 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Search'>;
 
 type SearchType = 'All' | 'Feed' | 'Marketplace';
 
-const FILTERS: SearchType[] = [
-  'All',
-  'Feed',
-  'Marketplace',
-];
+const FILTERS: SearchType[] = ['All', 'Feed', 'Marketplace'];
 const SEARCH_TYPE: Record<SearchType, CampusSearchType | 'all'> = {
   All: 'all',
   Feed: 'feed',
   Marketplace: 'marketplace',
 };
 
-export default function SearchScreen({navigation}: Props) {
-  const [query, setQuery] = useState('');
+export default function SearchScreen({navigation, route}: Props) {
+  const [query, setQuery] = useState(route.params?.initialQuery ?? '');
   const [activeFilter, setActiveFilter] = useState<SearchType>('All');
   const [results, setResults] = useState<CampusSearchResult[]>([]);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
@@ -54,7 +50,9 @@ export default function SearchScreen({navigation}: Props) {
       setError(null);
       try {
         const rows = await searchCampus(query, SEARCH_TYPE[activeFilter]);
-        if (active) setResults(rows);
+        if (active) {
+          setResults(rows);
+        }
       } catch (requestError) {
         if (active) {
           setError(
@@ -64,7 +62,9 @@ export default function SearchScreen({navigation}: Props) {
           );
         }
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     }, 250);
 
