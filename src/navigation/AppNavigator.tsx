@@ -38,7 +38,7 @@ import {AlertsProvider, useAlerts} from '../context/AlertsContext';
 import {setSessionExpiredHandler} from '../services/api';
 import Icon from 'react-native-vector-icons/Feather';
 import {colors} from '../theme/colors.ts';
-import {View} from 'react-native';
+import {View, StyleSheet} from 'react-native';
 import {createNavigationContainerRef} from '@react-navigation/native';
 import {
   createNativeStackNavigator,
@@ -135,27 +135,9 @@ function ElectionTabIcon({color, size}: {color: string; size: number}) {
 function AlertsTabIcon({color, size}: {color: string; size: number}) {
   const {unreadCount} = useAlerts();
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
+    <View style={styles.alertsTabIconContainer}>
       <Icon name="bell" color={color} size={size} />
-      {unreadCount > 0 && (
-        <View
-          style={{
-            position: 'absolute',
-            top: -2,
-            right: -2,
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: colors.accent,
-          }}
-        />
-      )}
+      {unreadCount > 0 && <View style={styles.alertsTabIconBadge} />}
     </View>
   );
 }
@@ -227,18 +209,28 @@ export default function AppNavigator() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const {
-        data: {session},
-      } = await backend.auth.getSession();
-      if (active) {
-        setInitialRoute(
-          sessionExpiredDuringStartup.current
-            ? 'SignIn'
-            : session
-            ? 'Home'
-            : 'Onboarding',
-        );
-        setChecking(false);
+      try {
+        const {
+          data: {session},
+        } = await backend.auth.getSession();
+        if (active) {
+          setInitialRoute(
+            sessionExpiredDuringStartup.current
+              ? 'SignIn'
+              : session
+              ? 'Home'
+              : 'Onboarding',
+          );
+          setChecking(false);
+        }
+      } catch (error) {
+        console.error('Session check failed:', error);
+        if (active) {
+          setInitialRoute(
+            sessionExpiredDuringStartup.current ? 'SignIn' : 'Onboarding',
+          );
+          setChecking(false);
+        }
       }
     })();
     return () => {
@@ -323,3 +315,21 @@ export default function AppNavigator() {
 }
 
 export type {NativeStackScreenProps, BottomTabScreenProps};
+
+const styles = StyleSheet.create({
+  alertsTabIconContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertsTabIconBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+});
