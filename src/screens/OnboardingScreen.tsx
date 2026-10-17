@@ -1,10 +1,9 @@
-import React, {useRef, useState} from 'react';
+import React from 'react';
 import {View, Text, StyleSheet, StatusBar, Image} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Feather';
-import AppButton from '../components/AppButton.tsx';
-import {colors, radius, spacing} from '../theme/colors.ts';
+import AppButton from '../components/AppButton';
+import {colors, radius, spacing} from '../theme/colors';
 import {useThemedStyles} from '../theme/PreferencesContext';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../navigation/AppNavigator';
@@ -12,22 +11,17 @@ import type {RootStackParamList} from '../navigation/AppNavigator';
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 
 export default function OnboardingScreen({navigation}: Props) {
-  const [, setIsVideoReady] = useState(false);
-  const videoRef = useRef<any>(null);
-
-  const stopVideo = () => {
-    videoRef.current?.pause();
-  };
-
   const styles = useThemedStyles(() =>
     StyleSheet.create({
       background: {flex: 1},
+      image: {
+        ...StyleSheet.absoluteFillObject,
+        width: '100%',
+        height: '100%',
+      },
       overlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.45)',
-      },
-      video: {
-        ...StyleSheet.absoluteFillObject,
       },
       safe: {
         flex: 1,
@@ -131,14 +125,12 @@ export default function OnboardingScreen({navigation}: Props) {
 
   return (
     <View style={styles.background}>
-      <Video
-        ref={videoRef}
-        source={require('../assets/uniosun.mp4')}
-        style={styles.video}
+      <Image
+        source={{
+          uri: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1000',
+        }}
+        style={styles.image}
         resizeMode="cover"
-        repeat
-        poster="https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1000"
-        onReadyForDisplay={() => setIsVideoReady(true)}
       />
       <View style={styles.overlay} pointerEvents="none" />
       <StatusBar barStyle="light-content" />
@@ -181,20 +173,14 @@ export default function OnboardingScreen({navigation}: Props) {
 
           <AppButton
             label="Get Started"
-            onPress={() => {
-              stopVideo();
-              navigation.navigate('CreateAccount');
-            }}
+            onPress={() => navigation.navigate('CreateAccount')}
             icon={<Icon name="arrow-right" size={18} color={colors.white} />}
             style={{marginTop: spacing.lg}}
           />
           <AppButton
             label="Sign In to Account"
             variant="secondary"
-            onPress={() => {
-              stopVideo();
-              navigation.navigate('SignIn');
-            }}
+            onPress={() => navigation.navigate('SignIn')}
             style={{marginTop: spacing.sm}}
           />
         </View>
