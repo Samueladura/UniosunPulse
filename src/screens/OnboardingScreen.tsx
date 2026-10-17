@@ -135,7 +135,7 @@ export default function OnboardingScreen({navigation}: Props) {
       <View style={styles.overlay} pointerEvents="none" />
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={styles.safe}>
-        {/* Top bar */}
+
         <View style={styles.topBar}>
           <View style={styles.brandRow}>
             <View style={styles.logoBadge}>
@@ -163,7 +163,7 @@ export default function OnboardingScreen({navigation}: Props) {
           </View>
 
           <Text style={styles.headline}>
-            Your Campus,{'\n'}Your Pulse,{'\n'}Your Voice.
+            Your Campus,{'\n'}Your i,{'\n'}Your Voice.
           </Text>
 
           <Text style={styles.description}>
