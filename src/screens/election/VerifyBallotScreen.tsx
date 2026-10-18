@@ -224,7 +224,7 @@ export default function VerifyBallotScreen({
           source={require('../../assets/uniosun-logo.png')}
           style={styles.headerLogo}
         />
-         <Text style={styles.headerTitle}>UniOsun Pulse</Text>
+         <Text style={styles.headerTitle}>UniOsunInfo </Text>
        </View>
 
       <ScrollView

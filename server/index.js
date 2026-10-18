@@ -32,6 +32,10 @@ const allowedTables = new Set([
   'users',
   'auth_sessions',
   'profiles',
+  'elections',
+  'positions',
+  'election_candidates',
+  'election_votes',
 ]);
 
 const app = express();

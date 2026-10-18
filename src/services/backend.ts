@@ -1639,27 +1639,47 @@ export interface BallotReceipt {
 export async function fetchBallotReceipts(
   electionId: string,
 ): Promise<BallotReceipt[]> {
-  const {data, error} = await backend
-    .from('election_votes')
-    .select(
-      'id, election_id, position_id, candidate_id, receipt_hash, created_at, candidate:election_candidates(name)',
-    )
-    .eq('election_id', electionId)
-    .order('created_at', {ascending: false});
+  try {
+    const {data, error} = await backend
+      .from('election_votes')
+      .select(
+        'id, election_id, position_id, candidate_id, receipt_hash, created_at',
+      )
+      .eq('election_id', electionId)
+      .order('created_at', {ascending: false});
 
-  if (error || !data) {
+    if (error || !data) {
+      return [];
+    }
+
+    const receipts: BallotReceipt[] = data.map((row: any) => ({
+      id: row.id,
+      election_id: row.election_id,
+      position_id: row.position_id,
+      candidate_id: row.candidate_id,
+      candidate_name: 'Unknown',
+      receipt_hash: row.receipt_hash,
+      created_at: row.created_at,
+    }));
+
+    const {data: candidatesData} = await backend
+      .from('election_candidates')
+      .select('id, name')
+      .eq('election_id', electionId);
+
+    if (candidatesData) {
+      const candidateMap = new Map(
+        (candidatesData as any[]).map(c => [c.id, c?.name ?? 'Unknown']),
+      );
+      receipts.forEach(r => {
+        r.candidate_name = candidateMap.get(r.candidate_id) ?? 'Unknown';
+      });
+    }
+
+    return receipts;
+  } catch {
     return [];
   }
-
-  return data.map((row: any) => ({
-    id: row.id,
-    election_id: row.election_id,
-    position_id: row.position_id,
-    candidate_id: row.candidate_id,
-    candidate_name: row.candidate?.name || 'Unknown',
-    receipt_hash: row.receipt_hash,
-    created_at: row.created_at,
-  }));
 }
 
 export async function fetchUserVotedPositions(
