@@ -28,6 +28,9 @@ subprojects {
             force 'androidx.core:core-ktx:1.13.1'
         }
     }
+    tasks.withType(JavaCompile).configureEach {
+        options.fork = false
+    }
     // Limit all subproject (library) native builds to arm64-v8a only.
     // This prevents parallel CMake processes from locking each other's
     // intermediate files on Windows when building for multiple ABIs.
